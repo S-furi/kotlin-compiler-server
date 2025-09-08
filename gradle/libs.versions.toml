@@ -42,6 +42,7 @@ kotlin-compiler-ide = { group = "org.jetbrains.kotlin", name = "kotlin-compiler-
 kotlin-idea = { group = "org.jetbrains.kotlin", name = "idea", version.ref = "kotlinIdeVersionWithSuffix" }
 kotlin-core = { group = "org.jetbrains.kotlin", name = "core", version.ref = "kotlinIdeVersionWithSuffix" }
 kotlinx-coroutines-core-jvm = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-core-jvm", version.ref = "kotlinx-coroutines" }
+kotlinx-coroutines-reactor = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-reactor", version.ref = "kotlinx-coroutines" }
 kotlinx-coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-test", version.ref = "kotlinx-coroutines-test" }
 kotlinx-datetime = { group = "org.jetbrains.kotlinx", name = "kotlinx-datetime", version.ref = "kotlinx-datetime" }
 kotlinx-io-bytestring = { group = "org.jetbrains.kotlinx", name = "kotlinx-io-bytestring", version.ref = "kotlinx-io" }
