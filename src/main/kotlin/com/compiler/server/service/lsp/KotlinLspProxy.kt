@@ -23,8 +23,8 @@ import java.util.concurrent.ConcurrentHashMap
 @Component
 open class KotlinLspProxy {
 
-    protected lateinit var client: KotlinLspClient
-    protected val lspProjects = ConcurrentHashMap<Project, LspProject>()
+    internal lateinit var client: KotlinLspClient
+    internal val lspProjects = ConcurrentHashMap<Project, LspProject>()
 
     @EventListener(ApplicationReadyEvent::class)
     fun initClientOnReady() {
@@ -128,8 +128,7 @@ open class KotlinLspProxy {
     }
 }
 
-@Component
-class StatefulKotlinLspProxy: KotlinLspProxy() {
+object StatefulKotlinLspProxy {
     private val clientsProjects = ConcurrentHashMap<String, Project>()
 
     /**
@@ -147,7 +146,7 @@ class StatefulKotlinLspProxy: KotlinLspProxy() {
      * @param ch the character position
      * @return a list of [CompletionItem]s
      */
-    suspend fun getCompletionsForClient(clientId: String, newProject: Project, line: Int, ch: Int): List<CompletionItem> {
+    suspend fun KotlinLspProxy.getCompletionsForClient(clientId: String, newProject: Project, line: Int, ch: Int): List<CompletionItem> {
         val project = clientsProjects[clientId] ?: return emptyList()
         val lspProject = lspProjects[project] ?: return emptyList()
         val newContent = newProject.files.first().text
@@ -156,26 +155,21 @@ class StatefulKotlinLspProxy: KotlinLspProxy() {
         return getCompletions(lspProject, line, ch, documentToChange)
     }
 
-    fun onClientConnected(clientId: String) {
+    fun KotlinLspProxy.onClientConnected(clientId: String) {
         val project = Project(files = listOf(ProjectFile(name = "$client.kt"))).also { clientsProjects[clientId] = it }
         val lspProject = LspProject.fromProject(project).also { lspProjects[project] = it }
         lspProject.getDocumentsUris().forEach { uri -> client.openDocument(uri, "") }
     }
 
-    fun onClientDisconnected(clientId: String) {
+    fun KotlinLspProxy.onClientDisconnected(clientId: String) {
         clientsProjects[clientId]?.let {
             closeProject(it)
             clientsProjects.remove(clientId)
         }
     }
 
-    private fun changeDocumentContent(lspProject: LspProject, documentToChange: String, newContent: String) {
+    private fun KotlinLspProxy.changeDocumentContent(lspProject: LspProject, documentToChange: String, newContent: String) {
         lspProject.changeDocumentContents(documentToChange, newContent)
         client.changeDocument(lspProject.getDocumentUri(documentToChange)!!, newContent)
-    }
-
-    override fun closeAllProjects() {
-        clientsProjects.clear()
-        super.closeAllProjects()
     }
 }
