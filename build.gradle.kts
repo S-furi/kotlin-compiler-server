@@ -42,6 +42,8 @@ dependencies {
     annotationProcessor("org.springframework:spring-context-indexer")
     implementation("com.google.code.gson:gson")
     implementation("org.springframework.boot:spring-boot-starter-web")
+    implementation("org.springframework.boot:spring-boot-starter-webflux")
+    implementation("org.springframework.boot:spring-boot-starter-websocket")
     implementation(libs.springdoc)
     implementation(libs.aws.springboot.container)
     implementation(libs.junit)
@@ -56,6 +58,7 @@ dependencies {
     }
     implementation(libs.kotlin.core)
     implementation(libs.org.eclipse.lsp4j)
+    implementation(libs.kotlinx.coroutines.reactor)
     implementation(project(":executors", configuration = "default"))
     implementation(project(":common", configuration = "default"))
 
