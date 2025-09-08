@@ -1,45 +1,17 @@
 package com.compiler.server.compiler.components.lsp
 
-import com.compiler.server.compiler.KotlinFile
-import com.compiler.server.compiler.components.ICompletionProvider
-import com.compiler.server.model.ProjectType
-import org.eclipse.lsp4j.CompletionItem
-import org.jetbrains.kotlin.cli.jvm.compiler.KotlinCoreEnvironment
-import org.jetbrains.kotlin.psi.KtFile
+import com.compiler.server.compiler.components.lsp.LspCompletionParser.toCompletion
+import com.compiler.server.model.Project
+import com.compiler.server.service.lsp.KotlinLspProxy
+import model.Completion
+import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.stereotype.Component
-import java.net.URI
 
 @Component
-abstract class LspCompletionProvider : ICompletionProvider {
+class LspCompletionProvider(
+    @param:Qualifier("kotlinLspProxy") private val lspProxy: KotlinLspProxy,
+) {
 
-    abstract fun getCompletion(
-        project: LspProject,
-        line: Int,
-        ch: Int,
-        owner: String? = null
-    ): List<CompletionItem>
-
-    override fun complete(
-        file: KotlinFile,
-        line: Int,
-        character: Int,
-        projectType: ProjectType,
-        coreEnvironment: KotlinCoreEnvironment
-    ) {
-        prepareContextForUser(file.kotlinFile, projectType)
-    }
-
-    private fun prepareContextForUser(
-        kotlinFile: KtFile,
-        projectType: ProjectType,
-    ) {
-        LspProject.fromFile(
-            fileName = kotlinFile.name,
-            fileContents = kotlinFile.text,
-            projectType = projectType,
-        )
-    }
-
-
-
+    suspend fun complete(project: Project, line: Int, ch: Int): List<Completion> =
+        lspProxy.getOneTimeCompletions(project, line, ch).mapNotNull { it.toCompletion() }
 }

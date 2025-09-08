@@ -2,23 +2,26 @@ package com.compiler.server.service
 
 import com.compiler.server.compiler.KotlinFile
 import com.compiler.server.compiler.components.*
+import com.compiler.server.compiler.components.lsp.LspCompletionProvider
 import com.compiler.server.model.*
 import com.compiler.server.model.bean.VersionInfo
 import component.KotlinEnvironment
 import model.Completion
 import org.jetbrains.kotlin.cli.jvm.compiler.KotlinCoreEnvironment
+import org.jetbrains.kotlin.config.languageVersionSettings
 import org.jetbrains.kotlin.psi.KtFile
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
 
 @Component
 class KotlinProjectExecutor(
-  private val kotlinCompiler: KotlinCompiler,
-  private val completionProvider: CompletionProvider,
-  private val version: VersionInfo,
-  private val kotlinToJSTranslator: KotlinToJSTranslator,
-  private val kotlinEnvironment: KotlinEnvironment,
-  private val loggerDetailsStreamer: LoggerDetailsStreamer? = null,
+    private val kotlinCompiler: KotlinCompiler,
+    private val completionProvider: CompletionProvider,
+    private val lspCompletionProvider: LspCompletionProvider,
+    private val version: VersionInfo,
+    private val kotlinToJSTranslator: KotlinToJSTranslator,
+    private val kotlinEnvironment: KotlinEnvironment,
+    private val loggerDetailsStreamer: LoggerDetailsStreamer? = null,
 ) {
 
   private val log = LoggerFactory.getLogger(KotlinProjectExecutor::class.java)
@@ -63,6 +66,9 @@ class KotlinProjectExecutor(
       }
     }
   }
+
+    suspend fun completeWithLsp(project: Project, line: Int, character: Int): List<Completion> =
+        lspCompletionProvider.complete(project, line, character)
 
   fun highlight(project: Project): CompilerDiagnostics = try {
     when (project.confType) {
