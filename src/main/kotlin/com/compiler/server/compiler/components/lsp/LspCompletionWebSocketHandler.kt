@@ -2,7 +2,10 @@ package com.compiler.server.compiler.components.lsp
 
 import com.compiler.server.compiler.components.lsp.LspCompletionParser.toCompletion
 import com.compiler.server.model.Project
-import com.compiler.server.service.lsp.StatefulKotlinLspProxy
+import com.compiler.server.service.lsp.KotlinLspProxy
+import com.compiler.server.service.lsp.StatefulKotlinLspProxy.getCompletionsForClient
+import com.compiler.server.service.lsp.StatefulKotlinLspProxy.onClientConnected
+import com.compiler.server.service.lsp.StatefulKotlinLspProxy.onClientDisconnected
 import com.fasterxml.jackson.core.JsonProcessingException
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.registerKotlinModule
@@ -28,7 +31,7 @@ import kotlin.time.Duration.Companion.seconds
 
 @Component
 class LspCompletionWebSocketHandler(
-    private val lspProxy: StatefulKotlinLspProxy,
+    private val lspProxy: KotlinLspProxy,
 ): TextWebSocketHandler() {
     private val job = SupervisorJob()
     private val scope = CoroutineScope(
