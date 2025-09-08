@@ -55,6 +55,7 @@ dependencies {
         isTransitive = false
     }
     implementation(libs.kotlin.core)
+    implementation(libs.org.eclipse.lsp4j)
     implementation(project(":executors", configuration = "default"))
     implementation(project(":common", configuration = "default"))
 
