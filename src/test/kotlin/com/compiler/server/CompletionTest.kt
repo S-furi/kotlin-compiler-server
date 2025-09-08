@@ -1,93 +1,47 @@
 package com.compiler.server
 
 import com.compiler.server.base.BaseExecutorTest
-import org.junit.jupiter.api.Test
+import com.compiler.server.model.Project
+import com.compiler.server.model.ProjectFile
+import com.compiler.server.service.lsp.KotlinLspProxy
+import kotlinx.coroutines.runBlocking
+import org.junit.jupiter.api.BeforeAll
 import kotlin.test.Ignore
 
 // TODO(Dmitrii Krasnov): this test is disabled until KTL-2807 is fixed
 @Ignore
-class CompletionTest : BaseExecutorTest() {
-  @Test
-  fun `variable completion test`() {
-    complete(
-      code = "fun main() {\n    val alex = 1\n    val alex1 = 1 + a\n}",
-      line = 2,
-      character = 21,
-      completions = listOf(
-        "alex"
-      )
-    )
+class CompletionTest : BaseExecutorTest(), AbstractCompletionTest {
+  override fun performCompletion(code: String, line: Int, character: Int, completions: List<String>, isJs: Boolean) {
+      complete(code, line, character, completions, isJs)
   }
+}
 
-  @Test
-  fun `variable completion test js`() {
-    complete(
-      code = "fun main() {\n    val alex = 1\n    val alex1 = 1 + a\n}",
-      line = 2,
-      character = 21,
-      completions = listOf(
-        "alex"
-      ),
-      isJs = true
-    )
-  }
+class LspCompletionTest : BaseExecutorTest(), AbstractCompletionTest {
 
-  @Test
-  fun `double to int completion test`() {
-    complete(
-      code = "fun main() {\n    3.0.toIn\n}",
-      line = 1,
-      character = 12,
-      completions = listOf(
-        "toInt()"
-      )
-    )
-  }
+    override fun performCompletion(
+        code: String,
+        line: Int,
+        character: Int,
+        completions: List<String>,
+        isJs: Boolean,
+    ) {
+        runBlocking {
+            val project = Project(files = listOf(ProjectFile(text = code, name = "test.kt")))
+            lspProxy.getOneTimeCompletions(
+                project = project,
+                line = line,
+                ch = character,
+            )
+        }
+    }
 
-  @Test
-  fun `double to int completion test js`() {
-    complete(
-      code = "fun main() {\n    3.0.toIn\n}",
-      line = 1,
-      character = 12,
-      completions = listOf(
-        "toInt()"
-      ),
-      isJs = true
-    )
-  }
+    companion object {
+        private val lspProxy = KotlinLspProxy()
 
-
-  @Test
-  fun `listOf completion test`() {
-    complete(
-      code = "fun main() {\n    list\n}",
-      line = 1,
-      character = 8,
-      completions = listOf(
-        "listOf()",
-        "listOf(element: T)",
-        "listOfNotNull(element: T?)",
-        "listOfNotNull(vararg elements: T?)",
-        "listOf(vararg elements: T)"
-      )
-    )
-  }
-
-  @Test
-  fun `listOf completion test js`() {
-    complete(
-      code = "fun main() {\n    list\n}",
-      line = 1,
-      character = 8,
-      completions = listOf(
-        "listOf()",
-        "listOf(element: T)",
-        "listOfNotNull(element: T?)",
-        "listOfNotNull(vararg elements: T?)",
-        "listOf(vararg elements: T)"
-      ),
-      isJs = true
-    )
-  }
+        @BeforeAll
+        @JvmStatic
+        fun setUpLsp() = runBlocking {
+            lspProxy.initializeClient()
+        }
+    }
 }

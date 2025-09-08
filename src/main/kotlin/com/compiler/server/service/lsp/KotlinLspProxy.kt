@@ -7,11 +7,17 @@ import com.compiler.server.service.lsp.client.DocumentSync.changeDocument
 import com.compiler.server.service.lsp.client.DocumentSync.closeDocument
 import com.compiler.server.service.lsp.client.DocumentSync.openDocument
 import com.compiler.server.service.lsp.client.KotlinLspClient
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.future.await
+import kotlinx.coroutines.launch
 import org.eclipse.lsp4j.CompletionItem
 import org.eclipse.lsp4j.Position
+import org.springframework.boot.context.event.ApplicationReadyEvent
+import org.springframework.context.event.EventListener
 import org.springframework.stereotype.Component
 import java.net.URI
+import java.nio.file.Path
 import java.util.concurrent.ConcurrentHashMap
 
 @Component
@@ -19,6 +25,18 @@ open class KotlinLspProxy {
 
     protected lateinit var client: KotlinLspClient
     protected val lspProjects = ConcurrentHashMap<Project, LspProject>()
+
+    @EventListener(ApplicationReadyEvent::class)
+    fun initClientOnReady() {
+        CoroutineScope(Dispatchers.IO).launch {
+            client = KotlinLspClient.create(
+                LSP_USERS_PROJECTS_ROOT.path,
+                "kotlin-compiler-server",
+            )
+        }
+    }
+
+    fun isLspClientConnected(): Boolean = ::client.isInitialized
 
     /**
      * Initialize the LSP client. This method must be called before any other method in this
@@ -95,15 +113,22 @@ open class KotlinLspProxy {
         lspProjects.remove(project)
     }
 
+    fun closeAllProjects() {
+        lspProjects.keys.forEach { closeProject(it) }
+        lspProjects.clear()
+    }
+
     companion object {
         val LSP_HOST = System.getenv("LSP_HOST") ?: "127.0.0.1"
         val LSP_PORT = System.getenv("LSP_PORT")?.toInt() ?: 9999
         val LSP_REST_ENDPOINT = "http://$LSP_HOST:$LSP_PORT"
         val LSP_SOCKET_ENDPOINT = "ws://$LSP_HOST:$LSP_PORT"
-        val LSP_USERS_PROJECTS_ROOT: URI = URI.create( System.getenv("LSP_USERS_PROJECTS_ROOT") ?: ("/lsp-users-projects-root"))
+        val LSP_USERS_PROJECTS_ROOT: URI =
+            Path.of(System.getenv("LSP_USERS_PROJECTS_ROOT") ?: ("lsp-users-projects-root")).toUri()
     }
 }
 
+@Component
 class StatefulKotlinLspProxy: KotlinLspProxy() {
     private val clientsProjects = ConcurrentHashMap<String, Project>()
 
@@ -147,5 +172,10 @@ class StatefulKotlinLspProxy: KotlinLspProxy() {
     private fun changeDocumentContent(lspProject: LspProject, documentToChange: String, newContent: String) {
         lspProject.changeDocumentContents(documentToChange, newContent)
         client.changeDocument(lspProject.getDocumentUri(documentToChange)!!, newContent)
+    }
+
+    override fun closeAllProjects() {
+        clientsProjects.clear()
+        super.closeAllProjects()
     }
 }

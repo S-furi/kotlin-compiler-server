@@ -1,6 +1,7 @@
 package com.compiler.server.service.lsp.client
 
 import com.compiler.server.service.lsp.KotlinLspProxy
+import com.compiler.server.service.lsp.KotlinLspProxy.Companion.LSP_USERS_PROJECTS_ROOT
 import kotlinx.coroutines.future.await
 import org.eclipse.lsp4j.*
 import org.eclipse.lsp4j.launch.LSPLauncher
@@ -26,13 +27,13 @@ class KotlinLspClient {
             this.workspaceFolders = workspaceFolders
         }
 
-        logger.trace("Initializing LSP client...")
+        logger.info("Initializing LSP client...")
 
         return languageServer.initialize(params)
             .thenCompose { res ->
                 logger.debug(">>> Initialization response from server:\n{}", res)
                 languageServer.initialized(InitializedParams())
-                logger.trace("LSP client initialized with workspace={}, name={}", kotlinProjectRoot, projectName)
+                logger.info("LSP client initialized with workspace={}, name={}", kotlinProjectRoot, projectName)
                 CompletableFuture.completedFuture(null)
             }
     }
@@ -86,6 +87,18 @@ class KotlinLspClient {
     }
 
     companion object Companion {
+
+        /**
+         * Creates and initialize an LSP client.
+         *
+         * [kotlinProjectRoot] is the path ([[java.net.URI.path]]) to the root project directory,
+         * where the project must be a project supported by [Kotlin-LSP](https://github.com/Kotlin/kotlin-lsp).
+         * The workspace will not contain users' files, but it can be used to store common files,
+         * to specify kotlin/java versions, project-wide imported libraries and so on.
+         *
+         * @param kotlinProjectRoot the path to the workspace directory, namely the root of the common project
+         * @param projectName the name of the project
+         */
         suspend fun create(kotlinProjectRoot: String, projectName: String = "None"): KotlinLspClient {
             return KotlinLspClient().apply {
                 initRequest(kotlinProjectRoot, projectName).await()

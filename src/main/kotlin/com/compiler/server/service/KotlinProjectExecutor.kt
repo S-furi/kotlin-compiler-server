@@ -1,11 +1,15 @@
 package com.compiler.server.service
 
 import com.compiler.server.compiler.components.*
+import com.compiler.server.compiler.components.lsp.LspCompletionProvider
 import com.compiler.server.model.*
 import com.compiler.server.model.bean.VersionInfo
 import component.KotlinEnvironment
 import model.Completion
 import org.junit.Ignore
+import org.jetbrains.kotlin.cli.jvm.compiler.KotlinCoreEnvironment
+import org.jetbrains.kotlin.config.languageVersionSettings
+import org.jetbrains.kotlin.psi.KtFile
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
 
@@ -13,6 +17,7 @@ import org.springframework.stereotype.Component
 class KotlinProjectExecutor(
     private val kotlinCompiler: KotlinCompiler,
     private val environment: KotlinEnvironment,
+    private val lspCompletionProvider: LspCompletionProvider,
     private val version: VersionInfo,
     private val kotlinToJSTranslator: KotlinToJSTranslator,
     private val loggerDetailsStreamer: LoggerDetailsStreamer? = null,
@@ -47,6 +52,9 @@ class KotlinProjectExecutor(
     fun complete(project: Project, line: Int, character: Int): List<Completion> {
         return emptyList()
     }
+
+    suspend fun completeWithLsp(project: Project, line: Int, character: Int): List<Completion> =
+        lspCompletionProvider.complete(project, line, character)
 
     fun highlight(project: Project): CompilerDiagnostics = try {
         when (project.confType) {
@@ -107,5 +115,4 @@ class KotlinProjectExecutor(
             getVersion().version
         )
     }
-
 }

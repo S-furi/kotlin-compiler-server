@@ -3,6 +3,7 @@ package com.compiler.server.controllers
 import com.compiler.server.model.*
 import com.compiler.server.model.bean.VersionInfo
 import com.compiler.server.service.KotlinProjectExecutor
+import kotlinx.coroutines.runBlocking
 import org.springframework.web.bind.annotation.*
 
 @RestController
@@ -43,6 +44,13 @@ class CompilerRestController(private val kotlinProjectExecutor: KotlinProjectExe
     @RequestParam line: Int,
     @RequestParam ch: Int
   ) = kotlinProjectExecutor.complete(project, line, ch)
+
+  @PostMapping("/lsp/complete")
+  suspend fun getKotlinLspCompleteEndpoint(
+      @RequestBody project: Project,
+      @RequestParam line: Int,
+      @RequestParam ch: Int
+  ) = kotlinProjectExecutor.completeWithLsp(project, line, ch)
 
   @PostMapping("/highlight")
   fun highlightEndpoint(@RequestBody project: Project): CompilerDiagnostics =
