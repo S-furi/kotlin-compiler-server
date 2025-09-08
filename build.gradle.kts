@@ -50,6 +50,7 @@ dependencies {
     implementation(project(":executors", configuration = "default"))
     implementation(project(":common", configuration = "default"))
     implementation(project(":dependencies"))
+    implementation(libs.org.eclipse.lsp4j)
 
     testImplementation(libs.kotlin.test)
     testImplementation("org.springframework.boot:spring-boot-starter-test") {
