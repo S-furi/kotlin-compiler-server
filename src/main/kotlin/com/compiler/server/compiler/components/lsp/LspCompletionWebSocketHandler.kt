@@ -1,6 +1,6 @@
 package com.compiler.server.compiler.components.lsp
 
-import com.compiler.server.compiler.components.lsp.LspCompletionParser.toCompletion
+import com.compiler.server.service.lsp.LspCompletionParser.toCompletion
 import com.compiler.server.model.Project
 import com.compiler.server.service.lsp.KotlinLspProxy
 import com.compiler.server.service.lsp.StatefulKotlinLspProxy.getCompletionsForClient
