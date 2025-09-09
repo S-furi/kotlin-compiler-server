@@ -15,6 +15,7 @@ plugins {
     alias(libs.plugins.spring.dependency.management)
     alias(libs.plugins.spring.boot)
     alias(libs.plugins.kotlin.plugin.spring)
+    alias(libs.plugins.kotlinx.serialization)
     id("base-kotlin-jvm-conventions")
 }
 
@@ -59,6 +60,8 @@ dependencies {
     implementation(libs.kotlin.core)
     implementation(libs.org.eclipse.lsp4j)
     implementation(libs.kotlinx.coroutines.reactor)
+    implementation(libs.kotlinx.serialization.core.jvm)
+    implementation(libs.kotlinx.serialization.json.jvm)
     implementation(project(":executors", configuration = "default"))
     implementation(project(":common", configuration = "default"))
 
@@ -148,6 +151,13 @@ tasks.named<Copy>("processResources") {
         archiveOperation.zipTree(it)
     }) {
         into("com/compiler/server")
+    }
+}
+
+if (hasProperty("buildScan")) {
+    extensions.findByName("buildScan")?.withGroovyBuilder {
+        setProperty("termsOfServiceUrl", "https://gradle.com/terms-of-service")
+        setProperty("termsOfServiceAgree", "no")
     }
 }
 
