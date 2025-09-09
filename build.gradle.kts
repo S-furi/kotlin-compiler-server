@@ -15,7 +15,6 @@ plugins {
     alias(libs.plugins.spring.dependency.management)
     alias(libs.plugins.spring.boot)
     alias(libs.plugins.kotlin.plugin.spring)
-    alias(libs.plugins.kotlinx.serialization)
     id("base-kotlin-jvm-conventions")
 }
 
@@ -174,4 +173,8 @@ tasks.withType<Test> {
     doFirst {
         this@withType.environment("kotlin.wasm.node.path", executablePath)
     }
+}
+val compileKotlin: KotlinCompile by tasks
+compileKotlin.compilerOptions {
+    freeCompilerArgs.set(listOf("-Xcontext-parameters"))
 }

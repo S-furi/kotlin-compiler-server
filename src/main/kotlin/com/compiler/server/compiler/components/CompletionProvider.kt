@@ -39,7 +39,7 @@ class CompletionProvider(
   private val indexationProvider: IndexationProvider
 ) {
   companion object {
-    private val excludedFromCompletion: List<String> = listOf(
+    internal val excludedFromCompletion: List<String> = listOf(
       "kotlin.jvm.internal",
       "kotlin.coroutines.experimental.intrinsics",
       "kotlin.coroutines.intrinsics",
