@@ -1,18 +1,38 @@
 package com.compiler.server.service.lsp.client
 
 import com.compiler.server.service.lsp.KotlinLspProxy
-import com.compiler.server.service.lsp.KotlinLspProxy.Companion.LSP_USERS_PROJECTS_ROOT
 import kotlinx.coroutines.future.await
 import org.eclipse.lsp4j.*
 import org.eclipse.lsp4j.launch.LSPLauncher
 import org.eclipse.lsp4j.services.LanguageServer
 import org.slf4j.LoggerFactory
+import java.net.ConnectException
 import java.net.Socket
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.Future
 
 class KotlinLspClient {
-    private val socket by lazy { Socket(KotlinLspProxy.LSP_HOST, KotlinLspProxy.LSP_PORT) }
+    private val maxLspConnectRetries = 5
+
+    private val socket by lazy {
+        var attempt = 0
+        do {
+            try {
+                return@lazy Socket(KotlinLspProxy.LSP_HOST, KotlinLspProxy.LSP_PORT)
+            } catch (e: Exception) {
+                when (e) {
+                    is ConnectException -> {
+                        logger.info("Connection to LSP server failed, retrying... ($attempt / $maxLspConnectRetries)")
+                        Thread.sleep(1000)
+                        attempt++
+                    }
+                    else -> throw e
+                }
+            }
+        } while (attempt < maxLspConnectRetries)
+        throw ConnectException("Could not connect to LSP server after $maxLspConnectRetries attempts")
+    }
+
     private val languageClient = KotlinLanguageClient()
     internal val languageServer: LanguageServer by lazy { getRemoteLanguageServer() }
     private lateinit var stopFuture: Future<Void>
