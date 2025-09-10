@@ -1,9 +1,8 @@
-package com.compiler.server.compiler.components.lsp
+package com.compiler.server.controllers
 
-import com.compiler.server.service.lsp.LspCompletionParser.toCompletion
 import com.compiler.server.model.Project
+import com.compiler.server.service.KotlinProjectExecutor
 import com.compiler.server.service.lsp.KotlinLspProxy
-import com.compiler.server.service.lsp.StatefulKotlinLspProxy.getCompletionsForClient
 import com.compiler.server.service.lsp.StatefulKotlinLspProxy.onClientConnected
 import com.compiler.server.service.lsp.StatefulKotlinLspProxy.onClientDisconnected
 import com.fasterxml.jackson.core.JsonProcessingException
@@ -32,6 +31,7 @@ import kotlin.time.Duration.Companion.seconds
 @Component
 class LspCompletionWebSocketHandler(
     private val lspProxy: KotlinLspProxy,
+    private val kotlinProjectExecutor: KotlinProjectExecutor,
 ): TextWebSocketHandler() {
     private val job = SupervisorJob()
     private val scope = CoroutineScope(
@@ -44,8 +44,7 @@ class LspCompletionWebSocketHandler(
     override fun handleTextMessage(session: WebSocketSession, message: TextMessage) {
         scope.launch {
             val request = session.decodeCompletionRequestFromTextMessage(message) ?: return@launch
-            lspProxy.getCompletionsForClient(session.id, request.project, request.line, request.ch)
-                .mapNotNull { it.toCompletion() }
+            kotlinProjectExecutor.completeWithLsp(clientId = session.id, request.project, request.line, request.ch)
                 .let { session.sendResponse(Response.Completions(it)) }
         }
     }

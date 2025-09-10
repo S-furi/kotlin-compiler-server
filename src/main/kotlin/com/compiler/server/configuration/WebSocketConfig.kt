@@ -1,6 +1,6 @@
 package com.compiler.server.configuration
 
-import com.compiler.server.compiler.components.lsp.LspCompletionWebSocketHandler
+import com.compiler.server.controllers.LspCompletionWebSocketHandler
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.context.annotation.Configuration
 import org.springframework.web.socket.config.annotation.EnableWebSocket
