@@ -10,10 +10,16 @@ import java.net.ConnectException
 import java.net.Socket
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.Future
+import kotlin.math.pow
 
 class KotlinLspClient {
-    private val maxLspConnectRetries = 5
 
+    private val languageClient = KotlinLanguageClient()
+    internal val languageServer: LanguageServer by lazy { getRemoteLanguageServer() }
+    private lateinit var stopFuture: Future<Void>
+    private val logger = LoggerFactory.getLogger(this::class.java)
+
+    private val maxLspConnectRetries = 5
     private val socket by lazy {
         var attempt = 0
         do {
@@ -23,7 +29,7 @@ class KotlinLspClient {
                 when (e) {
                     is ConnectException -> {
                         logger.info("Connection to LSP server failed, retrying... ($attempt / $maxLspConnectRetries)")
-                        Thread.sleep(1000)
+                        Thread.sleep((1000.0 * 2.0.pow(attempt)).toLong())
                         attempt++
                     }
                     else -> throw e
@@ -32,11 +38,6 @@ class KotlinLspClient {
         } while (attempt < maxLspConnectRetries)
         throw ConnectException("Could not connect to LSP server after $maxLspConnectRetries attempts")
     }
-
-    private val languageClient = KotlinLanguageClient()
-    internal val languageServer: LanguageServer by lazy { getRemoteLanguageServer() }
-    private lateinit var stopFuture: Future<Void>
-    private val logger = LoggerFactory.getLogger(this::class.java)
 
     fun initRequest(kotlinProjectRoot: String, projectName: String = "None"): CompletableFuture<Void> {
         val capabilities = getCompletionCapabilities()
