@@ -69,6 +69,7 @@ dependencies {
         exclude(group = "org.junit.vintage", module = "junit-vintage-engine")
     }
     testImplementation(libs.kotlinx.coroutines.test)
+    testImplementation(libs.bundles.testcontainers)
 
     resourceDependency(libs.skiko.js.wasm.runtime)
 }
