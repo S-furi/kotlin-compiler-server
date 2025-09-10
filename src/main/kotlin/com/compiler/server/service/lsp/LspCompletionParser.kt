@@ -7,17 +7,18 @@ import model.Icon
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import model.completionTextFromFullName
 import org.eclipse.lsp4j.CompletionItemLabelDetails
 
 object LspCompletionParser {
 
     fun CompletionItem.toCompletion(): Completion? {
-        val importPrefix = extractImportFromLabelDetails(labelDetails)
+        val (functionParams, importPrefix) = extractParamsAndImportFromLabelDetails(labelDetails)
         if (importPrefix != null && isInternalImport(importPrefix)) return null
         val import = importPrefix?.let { "$it.$label"}
 
         return Completion(
-            text = label,
+            text = completionTextFromFullName(label + functionParams.orEmpty()),
             displayText = label + labelDetails.detail,
             tail = labelDetails.description,
             import = import,
@@ -25,12 +26,40 @@ object LspCompletionParser {
         )
     }
 
-    private fun extractImportFromLabelDetails(labelDetails: CompletionItemLabelDetails): String? {
-        val input = labelDetails.detail ?: return null
-        if (isInternalImport(input)) return null
-        val regex = Regex("""\(([^():\s]+(?:\.[^():\s]+)*)\)""")
-        return regex.findAll(input).lastOrNull()?.groupValues?.get(1)
+    /**
+     * 4 cases of label details returned by the LSP:
+     * - Object, property, ... --> `(qualified.name.here)`
+     * - Function/method with params --> `(params: Type, ...) (qualified.name.here)`
+     * - *External* object, property, ... --> `for <receiver_type> in qualified.name.here`
+     * - *External* function/method --> `<func_name>?(params: Type) for <receiver_type> in qualified.name.here`
+     *
+     * Now also handles functions with complex parameter lists, including lambdas.
+     */
+    private fun extractParamsAndImportFromLabelDetails(
+        labelDetails: CompletionItemLabelDetails
+    ): Pair<String?, String?> {
+        val detail = labelDetails.detail ?: return null to null
+        return extractFunctionParams(detail) to extractImportFromLabelDetail(detail)
     }
+
+    private fun extractFunctionParams(detail: String): String? {
+        // Skip lines that start with whitespace followed by just a package name
+        if (detail.matches(Regex("""^\s*\([a-zA-Z.]+\)\s*$"""))) {
+            return null
+        }
+        val regex = Regex("""^\s*((?:\w+\s*)?\([^)]*\)|\([^)]*\)|\w+\s*\{.*?\})""")
+        return regex.find(detail)?.groupValues?.get(1)
+    }
+
+    private fun extractImportFromLabelDetail(detail: String?): String? {
+        val input = detail ?: return null
+        val regex = Regex(
+            """\(\s*([a-zA-Z0-9_.]+)\s*\)$|for\s+\S+\s+in\s+([a-zA-Z0-9_.]+)"""
+        )
+        val match = regex.find(input) ?: return null
+        return match.groupValues[1].ifEmpty { match.groupValues[2].ifEmpty { null } }
+    }
+
 
     internal fun parseIcon(name: String?): Icon? {
         val iconName = name?.uppercase() ?: return null
