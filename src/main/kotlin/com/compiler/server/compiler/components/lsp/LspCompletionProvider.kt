@@ -5,7 +5,9 @@ import com.compiler.server.service.lsp.FuzzyCompletionRanking.completionQuery
 import com.compiler.server.service.lsp.FuzzyCompletionRanking.rankCompletions
 import com.compiler.server.service.lsp.KotlinLspProxy
 import com.compiler.server.service.lsp.LspCompletionParser.toCompletion
+import com.compiler.server.service.lsp.StatefulKotlinLspProxy.getCompletionsForClient
 import model.Completion
+import org.eclipse.lsp4j.CompletionItem
 import org.jetbrains.kotlin.psi.KtFile
 import org.springframework.stereotype.Component
 
@@ -15,13 +17,27 @@ class LspCompletionProvider(
 ) {
 
     context(_: KtFile)
-    suspend fun complete(project: Project, line: Int, ch: Int): List<Completion> =
-        lspProxy.getOneTimeCompletions(project, line, ch).let { completionItems ->
-            completionItems.firstOrNull()?.completionQuery
-                ?.takeIf { !it.isBlank() }
-                ?.let { completionItems.rankCompletions(it) }
-                ?: completionItems
-        }.mapNotNull { it.toCompletion() }.cleanupImports()
+    suspend fun complete(project: Project, line: Int, ch: Int, applyFuzzyRanking: Boolean = true): List<Completion> =
+        lspProxy.getOneTimeCompletions(project, line, ch).transformCompletions(applyFuzzyRanking)
+
+    context(_: KtFile)
+    suspend fun complete(clientId: String, project: Project, line: Int, ch: Int, applyFuzzyRanking: Boolean = true): List<Completion> =
+        lspProxy.getCompletionsForClient(clientId, project, line, ch).transformCompletions(applyFuzzyRanking)
+
+    context(_: KtFile)
+    private fun List<CompletionItem>.transformCompletions(applyFuzzyRanking: Boolean): List<Completion> =
+            if (applyFuzzyRanking) {
+                rankedCompletions()
+            } else {
+                this
+            }.mapNotNull { it.toCompletion() }.cleanupImports()
+
+    private fun List<CompletionItem>.rankedCompletions(): List<CompletionItem> =
+        firstOrNull()?.completionQuery
+            ?.takeIf { !it.isBlank() }
+            ?.let { rankCompletions(it) }
+            ?: this
+
 
     context(file: KtFile)
     private fun List<Completion>.cleanupImports(): List<Completion> {

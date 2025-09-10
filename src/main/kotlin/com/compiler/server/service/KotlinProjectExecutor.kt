@@ -53,12 +53,19 @@ class KotlinProjectExecutor(
         return emptyList()
     }
 
-  suspend fun completeWithLsp(project: Project, line: Int, character: Int): List<Completion> {
-      val file = kotlinEnvironment.environment { getFilesFrom(project, it).first() }
-      return with (file.kotlinFile) {
-          lspCompletionProvider.complete(project, line, character)
-      }
-  }
+    suspend fun completeWithLsp(project: Project, line: Int, character: Int): List<Completion> {
+        val file = kotlinEnvironment.environment { getFilesFrom(project, it).first() }
+        return with (file.kotlinFile) {
+            lspCompletionProvider.complete(project, line, character)
+        }
+    }
+
+    suspend fun completeWithLsp(clientId: String, project: Project, line: Int, character: Int): List<Completion> {
+        val file = kotlinEnvironment.environment { getFilesFrom(project, it).first() }
+        return with (file.kotlinFile) {
+            lspCompletionProvider.complete(clientId, project, line, character)
+        }
+    }
 
     fun highlight(project: Project): CompilerDiagnostics = try {
         when (project.confType) {
