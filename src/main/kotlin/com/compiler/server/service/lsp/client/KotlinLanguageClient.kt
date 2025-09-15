@@ -12,26 +12,26 @@ class KotlinLanguageClient : LanguageClient {
     private val logger = LoggerFactory.getLogger(this::class.java)
 
     override fun telemetryEvent(o: Any) {
-        logger.debug(o.toString())
+        logger.info(o.toString())
     }
 
     override fun publishDiagnostics(diagnostics: PublishDiagnosticsParams) {
-        diagnostics.diagnostics.forEach { d -> logger.debug("Diagnostic: {} at {}", d.message, d.range) }
+        diagnostics.diagnostics.forEach { d -> logger.info("Diagnostic: {} at {}", d.message, d.range) }
     }
 
     override fun showMessage(messageParams: MessageParams) {
-        logger.debug("[{}]: {}", messageParams.type, messageParams.message)
+        logger.info("[{}]: {}", messageParams.type, messageParams.message)
     }
 
     override fun showMessageRequest(params: ShowMessageRequestParams): CompletableFuture<MessageActionItem?>? {
-        logger.debug("Message request: ${params.message}")
+        logger.info("Message request: ${params.message}")
         params.actions?.forEach { action ->
-            logger.debug("Action: ${action.title}")
+            logger.info("Action: ${action.title}")
         }
         return CompletableFuture.completedFuture(params.actions?.firstOrNull())
     }
 
     override fun logMessage(message: MessageParams) {
-        logger.debug("${message.message}")
+        logger.info("${message.message}")
     }
 }
