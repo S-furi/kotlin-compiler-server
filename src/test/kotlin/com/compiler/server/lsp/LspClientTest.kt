@@ -1,5 +1,6 @@
 package com.compiler.server.lsp
 
+import com.compiler.server.AbstractCompletionTest
 import com.compiler.server.service.lsp.client.DocumentSync.openDocument
 import com.compiler.server.service.lsp.client.KotlinLspClient
 import kotlinx.coroutines.delay
@@ -12,7 +13,6 @@ import org.junit.jupiter.api.assertAll
 import org.junit.jupiter.api.extension.BeforeAllCallback
 import org.junit.jupiter.api.extension.ExtendWith
 import org.junit.jupiter.api.extension.ExtensionContext
-import org.junit.platform.commons.logging.LoggerFactory
 import org.testcontainers.containers.ComposeContainer
 import java.io.File
 import kotlin.test.assertContains
@@ -21,16 +21,13 @@ import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.seconds
 
 @ExtendWith(KotlinLspComposeExtension::class)
-class LspClientTest {
+class LspClientTest: AbstractCompletionTest {
 
-    private val workspacePath = "/lsp-users-test-projects-root"
-
-    private val workspaceName = "lsp-users-test-project"
-
-    private lateinit var client: KotlinLspClient
-
+    private val workspacePath = "/lsp-users-projects-root"
+    private val workspaceName = "test"
     private val fakeResourceUri = "file:///foo/bar/File.kt"
 
+    private lateinit var client: KotlinLspClient
 
     @Test
     fun `LSP client should initialize correctly`() {
@@ -38,7 +35,7 @@ class LspClientTest {
     }
 
     @Test
-    fun `LSP client should provide completions as CompletionItems`() = runBlocking {
+    fun `LSP client should provide completions for local variables`() = runBlocking {
         val code = "fun main() {\n    val alex = 1\n    val alex1 = 1 + a\n}"
         val position = Position(2, 21)
 
@@ -48,7 +45,35 @@ class LspClientTest {
         assertAll(
             { assertTrue { completions.isNotEmpty() } },
             { assertContains(completions.map { it.label }, "alex") },
-            { assertEquals("kotlin.Int", completions.first { it.label == "alex" }.labelDetails?.description) }
+            { assertEquals("Int", completions.first { it.label == "alex" }.labelDetails?.description) }
+        )
+    }
+
+    @Test
+    fun `LSP client should provide completions for stdlib elements`() = runBlocking {
+        val code = "fun main() {\n    3.0.toIn\n}"
+        val position = Position(1, 12)
+
+        client.openDocument(fakeResourceUri, code)
+        delay(1.seconds)
+        val completions = client.getCompletion(fakeResourceUri, position).await()
+        assertAll(
+            { assertTrue { completions.isNotEmpty() } },
+            { assertContains(completions.map { it.label }, "toInt") },
+        )
+    }
+
+    @Test
+    fun `LSP client should provide completions for libs declared in build file`() = runBlocking {
+        val code = "fun main() {\n    runBlock\n}"
+        val position = Position(1, 12)
+
+        client.openDocument(fakeResourceUri, code)
+        delay(1.seconds)
+        val completions = client.getCompletion(fakeResourceUri, position).await()
+        assertAll(
+            { assertTrue { completions.isNotEmpty() } },
+            { assertContains(completions.map { it.label }, "runBlocking") },
         )
     }
 
@@ -59,6 +84,21 @@ class LspClientTest {
             client.exit()
         }
         client = KotlinLspClient.create(workspacePath, workspaceName)
+    }
+
+    override fun performCompletion(
+        code: String,
+        line: Int,
+        character: Int,
+        completions: List<String>,
+        isJs: Boolean
+    ) = runBlocking {
+        if (isJs) return@runBlocking
+        client.openDocument(fakeResourceUri, code)
+        val lspCompletions = client.getCompletion(fakeResourceUri, Position(line, character)).await().map { it.label }
+        completions.map { it.replace("""\([\w\s:]*\)""".toRegex(), "") }.forEach { completion ->
+            assertContains(lspCompletions, completion)
+        }
     }
 }
 
@@ -81,7 +121,6 @@ internal class KotlinLspComposeExtension: BeforeAllCallback, ExtensionContext.St
 
     companion object {
         private var started = false
-        private val logger = LoggerFactory.getLogger(KotlinLspComposeExtension::class.java)
         lateinit var container: ComposeContainer
     }
 }
