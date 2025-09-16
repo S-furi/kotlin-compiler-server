@@ -101,7 +101,7 @@ open class KotlinLspProxy {
         fileName: String,
     ): List<CompletionItem> {
         val uri = project.getDocumentUri(fileName) ?: return emptyList()
-        return client.getCompletion(uri, Position(line, ch)).await()
+        return client.getCompletionsWithRetry(uri, Position(line, ch))
     }
 
     private fun createNewProject(project: Project): LspProject = LspProject.fromProject(project)
