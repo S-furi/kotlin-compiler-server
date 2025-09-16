@@ -12,7 +12,7 @@ import java.util.concurrent.CompletableFuture
 import java.util.concurrent.Future
 import kotlin.math.pow
 
-class KotlinLspClient {
+class KotlinLspClient : AutoCloseable {
 
     private val languageClient = KotlinLanguageClient()
     internal val languageServer: LanguageServer by lazy { getRemoteLanguageServer() }
@@ -107,6 +107,10 @@ class KotlinLspClient {
         return launcher?.remoteProxy ?: throw RuntimeException("Cannot connect to server")
     }
 
+    override fun close() = runBlocking {
+        shutdown().await()
+        exit()
+    }
     companion object Companion {
 
         /**
