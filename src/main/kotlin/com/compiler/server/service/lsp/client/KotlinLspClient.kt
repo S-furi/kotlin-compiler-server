@@ -1,8 +1,12 @@
 package com.compiler.server.service.lsp.client
 
 import com.compiler.server.service.lsp.KotlinLspProxy
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.future.await
+import kotlinx.coroutines.runBlocking
 import org.eclipse.lsp4j.*
+import org.eclipse.lsp4j.jsonrpc.ResponseErrorException
+import org.eclipse.lsp4j.jsonrpc.messages.ResponseErrorCode
 import org.eclipse.lsp4j.launch.LSPLauncher
 import org.eclipse.lsp4j.services.LanguageServer
 import org.slf4j.LoggerFactory
@@ -11,6 +15,7 @@ import java.net.Socket
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.Future
 import kotlin.math.pow
+import kotlin.time.Duration.Companion.milliseconds
 
 class KotlinLspClient : AutoCloseable {
 
@@ -29,7 +34,7 @@ class KotlinLspClient : AutoCloseable {
                 when (e) {
                     is ConnectException -> {
                         logger.info("Connection to LSP server failed, retrying... ($attempt / $maxLspConnectRetries)")
-                        Thread.sleep((1000.0 * 2.0.pow(attempt)).toLong())
+                        Thread.sleep(exponentialBackoffMillis(attempt).toLong())
                         attempt++
                     }
                     else -> throw e
@@ -81,6 +86,46 @@ class KotlinLspClient : AutoCloseable {
             }
     }
 
+    /**
+     * Completion request on `textDocument/completion`, as [getCompletion].
+     * This method retries the request if it fails due to a [ResponseErrorException] with code
+     * [ResponseErrorCode.RequestFailed] and when the failing reason is due to the document not
+     * yet present in the language server (i.e. `didOpen` has not been called yet or the notification
+     * has not yet arrived). This method helps in situations where the language server is busy processing
+     * clients' requests and the completion request is received before the `didOpen` notification is processed.
+     */
+    suspend fun getCompletionsWithRetry(
+        uri: String,
+        position: Position,
+        triggerKind: CompletionTriggerKind = CompletionTriggerKind.Invoked,
+        maxRetries: Int = 3,
+    ): List<CompletionItem> {
+        var attempt = 0
+        var res: List<CompletionItem>? = null
+
+        while (attempt < maxRetries || res != null) {
+            res = runCatching {
+                getCompletion(uri, position, triggerKind).await()
+            }.onFailure { e ->
+                when (e) {
+                    is ResponseErrorException if (e.responseError.code == ResponseErrorCode.RequestFailed.value) -> {
+                        if (e.message?.startsWith("Document with url FileUrl(url='$uri'") ?: false) {
+                            logger.warn("Failed to get completions, retrying... (${attempt}/$maxRetries)", e)
+                            delay(exponentialBackoffMillis(attempt).milliseconds)
+                            attempt++
+                        }
+                    }
+                    else -> {
+                        logger.error("Failed to get completions", e)
+                        return emptyList()
+                    }
+                }
+
+            }.getOrNull()
+        }
+        return res ?: emptyList()
+    }
+
     fun shutdown(): CompletableFuture<Any> = languageServer.shutdown()
 
     fun exit() {
@@ -111,6 +156,9 @@ class KotlinLspClient : AutoCloseable {
         shutdown().await()
         exit()
     }
+
+    private fun exponentialBackoffMillis(attempt: Int): Double = 1000.0 * 2.0.pow(attempt)
+
     companion object Companion {
 
         /**
