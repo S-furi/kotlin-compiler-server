@@ -101,16 +101,15 @@ class KotlinLspClient : AutoCloseable {
         maxRetries: Int = 3,
     ): List<CompletionItem> {
         var attempt = 0
-        var res: List<CompletionItem>? = null
 
-        while (attempt < maxRetries || res != null) {
-            res = runCatching {
-                getCompletion(uri, position, triggerKind).await()
+        do {
+            runCatching {
+                return getCompletion(uri, position, triggerKind).await()
             }.onFailure { e ->
                 when (e) {
                     is ResponseErrorException if (e.responseError.code == ResponseErrorCode.RequestFailed.value) -> {
                         if (e.message?.startsWith("Document with url FileUrl(url='$uri'") ?: false) {
-                            logger.warn("Failed to get completions, retrying... (${attempt}/$maxRetries)", e)
+                            logger.warn("Failed to get completions, retrying... (${attempt + 1}/$maxRetries)", e)
                             delay(exponentialBackoffMillis(attempt).milliseconds)
                             attempt++
                         }
@@ -120,10 +119,9 @@ class KotlinLspClient : AutoCloseable {
                         return emptyList()
                     }
                 }
-
-            }.getOrNull()
-        }
-        return res ?: emptyList()
+            }
+        } while (attempt < maxRetries)
+        return emptyList()
     }
 
     fun shutdown(): CompletableFuture<Any> = languageServer.shutdown()
