@@ -9,7 +9,6 @@ import com.compiler.server.service.lsp.client.DocumentSync.openDocument
 import com.compiler.server.service.lsp.client.KotlinLspClient
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.future.await
 import kotlinx.coroutines.launch
 import org.eclipse.lsp4j.CompletionItem
 import org.eclipse.lsp4j.Position
