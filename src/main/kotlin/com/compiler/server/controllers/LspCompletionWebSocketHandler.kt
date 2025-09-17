@@ -12,9 +12,17 @@ import jakarta.annotation.PreDestroy
 import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import model.Completion
@@ -41,17 +49,25 @@ class LspCompletionWebSocketHandler(
     private val activeSession = ConcurrentHashMap<String, WebSocketSession>()
     private val logger = LoggerFactory.getLogger(LspCompletionWebSocketHandler::class.java)
 
+    private val sessionLocks = ConcurrentHashMap<String, Mutex>()
+    private val completionsJob = ConcurrentHashMap<String, Job>()
+    private val sessionFlows = ConcurrentHashMap<String, MutableSharedFlow<CompletionRequest>>()
+
     override fun handleTextMessage(session: WebSocketSession, message: TextMessage) {
-        scope.launch {
-            val request = session.decodeCompletionRequestFromTextMessage(message) ?: return@launch
-            kotlinProjectExecutor.completeWithLsp(clientId = session.id, request.project, request.line, request.ch)
-                .let { session.sendResponse(Response.Completions(it)) }
-        }
+        val request = session.decodeCompletionRequestFromTextMessage(message) ?: return
+        sessionFlows[session.id]?.tryEmit(request)
     }
 
+    @OptIn(FlowPreview::class)
     override fun afterConnectionEstablished(session: WebSocketSession) {
         activeSession[session.id] = session
-        scope.launch {
+
+        val flow =  MutableSharedFlow<CompletionRequest>(
+            extraBufferCapacity = 1,
+            onBufferOverflow = BufferOverflow.DROP_OLDEST,
+        ).also { sessionFlows[session.id] = it }
+
+        val completionWorker = scope.launch {
             with(session) {
                 logger.info("Lsp client connected: $id")
                 withTimeoutOrNull(10.seconds) {
@@ -62,7 +78,21 @@ class LspCompletionWebSocketHandler(
                 lspProxy.onClientConnected(id)
                 sendResponse(Response.Init(id))
             }
+
+            flow
+                .debounce { 200.milliseconds } // TODO: define a heuristic for average typing speed + frontend debounce
+                .collectLatest { req ->
+                    val res = kotlinProjectExecutor.completeWithLsp(
+                        clientId = session.id,
+                        project = req.project,
+                        line = req.line,
+                        character = req.ch
+                    )
+                    session.sendResponse(Response.Completions(res))
+                }
         }
+        completionWorker.invokeOnCompletion { completionsJob.remove(session.id) }
+        completionsJob[session.id] = completionWorker
     }
 
     override fun afterConnectionClosed(session: WebSocketSession, status: CloseStatus) {
@@ -77,14 +107,19 @@ class LspCompletionWebSocketHandler(
 
     private fun handleClientDisconnected(clientId: String) {
         activeSession.remove(clientId)
+        sessionFlows.remove(clientId)
+        completionsJob.remove(clientId)?.cancel()
         scope.launch { lspProxy.onClientDisconnected(clientId) }
     }
 
     private suspend fun WebSocketSession.sendResponse(response: Response) {
+        val mutex = sessionLocks.computeIfAbsent(id) { Mutex() }
         try {
-            if (isOpen) {
-                withContext(scope.coroutineContext) {
-                    sendMessage(TextMessage(response.toJson()))
+            mutex.withLock {
+                if (isOpen) {
+                    withContext(scope.coroutineContext) {
+                        sendMessage(TextMessage(response.toJson()))
+                    }
                 }
             }
         } catch (e: Exception) {
@@ -92,12 +127,12 @@ class LspCompletionWebSocketHandler(
         }
     }
 
-    private suspend fun WebSocketSession.decodeCompletionRequestFromTextMessage(message: TextMessage): CompletionRequest? =
+    private fun WebSocketSession.decodeCompletionRequestFromTextMessage(message: TextMessage): CompletionRequest? =
         try {
             objectMapper.readValue(message.payload, CompletionRequest::class.java)
         } catch (e: JsonProcessingException) {
             logger.warn("Invalid JSON from client: ${message.payload}")
-            sendResponse(Response.Error("Invalid JSON format for ${message.payload}: ${e.message}"))
+            scope.launch { sendResponse(Response.Error("Invalid JSON format for ${message.payload}: ${e.message}")) }
             null
         }
 
