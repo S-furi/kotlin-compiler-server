@@ -5,6 +5,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.future.await
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeout
 import org.eclipse.lsp4j.*
 import org.eclipse.lsp4j.jsonrpc.ResponseErrorException
@@ -109,7 +110,7 @@ class KotlinLspClient : AutoCloseable {
         do {
             try {
                 return withTimeout(1.5.seconds) {
-                    getCompletion(uri, position, triggerKind).await()
+                    getCompletion(uri, position, triggerKind).awaitCancellable()
                 }
             } catch (e: CancellationException) {
                 throw e
@@ -117,7 +118,7 @@ class KotlinLspClient : AutoCloseable {
                 when (e) {
                     is ResponseErrorException if (e.responseError.code == ResponseErrorCode.RequestFailed.value) -> {
                         if (e.message?.startsWith("Document with url FileUrl(url='$uri'") ?: false) {
-                            logger.debug("Failed to get completions (document not ready), retrying... (${attempt + 1}/$maxRetries)")
+                            logger.info("Failed to get completions (document not ready), retrying... (${attempt + 1}/$maxRetries)")
                             delay(exponentialBackoffMillis(attempt).milliseconds)
                             attempt++
                             continue
@@ -169,8 +170,17 @@ class KotlinLspClient : AutoCloseable {
         val  base = 100.0 * 2.0.pow(attempt)
         val jitter = Random.nextDouble(from = -0.3, until = 0.3)
         val withJitter = base * (1.0 + jitter)
-        return withJitter.coerceAtMost(1000.0)
+        return withJitter.coerceAtMost(500.0)
     }
+
+    private suspend fun <T> CompletableFuture<T>.awaitCancellable(): T =
+        suspendCancellableCoroutine { continuation ->
+            this.whenComplete { value, throwable ->
+                if (throwable == null) continuation.resume(value)
+                else continuation.resumeWithException(throwable)
+            }
+            continuation.invokeOnCancellation { this.cancel(true) }
+        }
 
     companion object Companion {
 
