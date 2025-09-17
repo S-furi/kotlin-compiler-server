@@ -13,16 +13,20 @@ import org.eclipse.lsp4j.jsonrpc.messages.ResponseErrorCode
 import org.eclipse.lsp4j.launch.LSPLauncher
 import org.eclipse.lsp4j.services.LanguageServer
 import org.slf4j.LoggerFactory
+import java.io.BufferedInputStream
+import java.io.BufferedOutputStream
 import java.net.ConnectException
 import java.net.Socket
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.Future
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
 import kotlin.math.pow
 import kotlin.random.Random
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
-class KotlinLspClient : AutoCloseable {
+class KotlinLspClient : LspClient {
 
     private val languageClient = KotlinLanguageClient()
     internal val languageServer: LanguageServer by lazy { getRemoteLanguageServer() }
@@ -34,7 +38,14 @@ class KotlinLspClient : AutoCloseable {
         var attempt = 0
         do {
             try {
-                return@lazy Socket(KotlinLspProxy.LSP_HOST, KotlinLspProxy.LSP_PORT)
+                return@lazy Socket(KotlinLspProxy.LSP_HOST, KotlinLspProxy.LSP_PORT).apply {
+                    tcpNoDelay = true
+                    keepAlive = true
+                    soTimeout = 0
+                    receiveBufferSize = 256 * 1024
+                    sendBufferSize = 256 * 1024
+                    setPerformancePreferences(0, 2, 1)
+                }
             } catch (e: Exception) {
                 when (e) {
                     is ConnectException -> {
@@ -42,6 +53,7 @@ class KotlinLspClient : AutoCloseable {
                         Thread.sleep(exponentialBackoffMillis(attempt).toLong())
                         attempt++
                     }
+
                     else -> throw e
                 }
             }
@@ -49,7 +61,7 @@ class KotlinLspClient : AutoCloseable {
         throw ConnectException("Could not connect to LSP server after $maxLspConnectRetries attempts")
     }
 
-    fun initRequest(kotlinProjectRoot: String, projectName: String = "None"): CompletableFuture<Void> {
+    override fun initRequest(kotlinProjectRoot: String, projectName: String): CompletableFuture<Void> {
         val capabilities = getCompletionCapabilities()
         val workspaceFolders = listOf(WorkspaceFolder("file://$kotlinProjectRoot", projectName))
 
@@ -69,10 +81,10 @@ class KotlinLspClient : AutoCloseable {
             }
     }
 
-    fun getCompletion(
+    override fun getCompletion(
         uri: String,
         position: Position,
-        triggerKind: CompletionTriggerKind = CompletionTriggerKind.Invoked,
+        triggerKind: CompletionTriggerKind,
     ): CompletableFuture<List<CompletionItem>> {
         val context = CompletionContext(triggerKind)
         val params = CompletionParams(
@@ -91,19 +103,11 @@ class KotlinLspClient : AutoCloseable {
             }
     }
 
-    /**
-     * Completion request on `textDocument/completion`, as [getCompletion].
-     * This method retries the request if it fails due to a [ResponseErrorException] with code
-     * [ResponseErrorCode.RequestFailed] and when the failing reason is due to the document not
-     * yet present in the language server (i.e. `didOpen` has not been called yet or the notification
-     * has not yet arrived). This method helps in situations where the language server is busy processing
-     * clients' requests and the completion request is received before the `didOpen` notification is processed.
-     */
-    suspend fun getCompletionsWithRetry(
+    override suspend fun getCompletionsWithRetry(
         uri: String,
         position: Position,
-        triggerKind: CompletionTriggerKind = CompletionTriggerKind.Invoked,
-        maxRetries: Int = 3,
+        triggerKind: CompletionTriggerKind,
+        maxRetries: Int,
     ): List<CompletionItem> {
         var attempt = 0
 
@@ -132,9 +136,9 @@ class KotlinLspClient : AutoCloseable {
         return emptyList()
     }
 
-    fun shutdown(): CompletableFuture<Any> = languageServer.shutdown()
+    override fun shutdown(): CompletableFuture<Any> = languageServer.shutdown()
 
-    fun exit() {
+    override fun exit() {
         languageServer.exit()
         stopFuture.cancel(true)
         socket.close()
@@ -150,9 +154,9 @@ class KotlinLspClient : AutoCloseable {
         workspace = WorkspaceClientCapabilities().apply { workspaceFolders = true }
     }
 
-    private fun getRemoteLanguageServer(): LanguageServer{
-        val input = socket.getInputStream()
-        val output = socket.getOutputStream()
+    private fun getRemoteLanguageServer(): LanguageServer {
+        val input = BufferedInputStream(socket.getInputStream(), 256 * 1024)
+        val output = BufferedOutputStream(socket.getOutputStream(), 256 * 1024)
         val launcher = LSPLauncher.createClientLauncher(languageClient, input, output)
         stopFuture = launcher.startListening()
         return launcher?.remoteProxy ?: throw RuntimeException("Cannot connect to server")
@@ -167,7 +171,7 @@ class KotlinLspClient : AutoCloseable {
      * Basic exponential backoff with jitter (+/-30%), up to 1000ms.
      */
     private fun exponentialBackoffMillis(attempt: Int): Double {
-        val  base = 100.0 * 2.0.pow(attempt)
+        val base = 100.0 * 2.0.pow(attempt)
         val jitter = Random.nextDouble(from = -0.3, until = 0.3)
         val withJitter = base * (1.0 + jitter)
         return withJitter.coerceAtMost(500.0)
@@ -181,26 +185,6 @@ class KotlinLspClient : AutoCloseable {
             }
             continuation.invokeOnCancellation { this.cancel(true) }
         }
-
-    companion object Companion {
-
-        /**
-         * Creates and initialize an LSP client.
-         *
-         * [kotlinProjectRoot] is the path ([[java.net.URI.path]]) to the root project directory,
-         * where the project must be a project supported by [Kotlin-LSP](https://github.com/Kotlin/kotlin-lsp).
-         * The workspace will not contain users' files, but it can be used to store common files,
-         * to specify kotlin/java versions, project-wide imported libraries and so on.
-         *
-         * @param kotlinProjectRoot the path to the workspace directory, namely the root of the common project
-         * @param projectName the name of the project
-         */
-        suspend fun create(kotlinProjectRoot: String, projectName: String = "None"): KotlinLspClient {
-            return KotlinLspClient().apply {
-                initRequest(kotlinProjectRoot, projectName).await()
-            }
-        }
-    }
 }
 
 object DocumentSync {
