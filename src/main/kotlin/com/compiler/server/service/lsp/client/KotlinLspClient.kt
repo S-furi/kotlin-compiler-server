@@ -1,9 +1,11 @@
 package com.compiler.server.service.lsp.client
 
 import com.compiler.server.service.lsp.KotlinLspProxy
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.future.await
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import org.eclipse.lsp4j.*
 import org.eclipse.lsp4j.jsonrpc.ResponseErrorException
 import org.eclipse.lsp4j.jsonrpc.messages.ResponseErrorCode
@@ -15,7 +17,9 @@ import java.net.Socket
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.Future
 import kotlin.math.pow
+import kotlin.random.Random
 import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.seconds
 
 class KotlinLspClient : AutoCloseable {
 
@@ -103,22 +107,25 @@ class KotlinLspClient : AutoCloseable {
         var attempt = 0
 
         do {
-            runCatching {
-                return getCompletion(uri, position, triggerKind).await()
-            }.onFailure { e ->
+            try {
+                return withTimeout(1.5.seconds) {
+                    getCompletion(uri, position, triggerKind).await()
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Throwable) {
                 when (e) {
                     is ResponseErrorException if (e.responseError.code == ResponseErrorCode.RequestFailed.value) -> {
                         if (e.message?.startsWith("Document with url FileUrl(url='$uri'") ?: false) {
-                            logger.warn("Failed to get completions, retrying... (${attempt + 1}/$maxRetries)", e)
+                            logger.debug("Failed to get completions (document not ready), retrying... (${attempt + 1}/$maxRetries)")
                             delay(exponentialBackoffMillis(attempt).milliseconds)
                             attempt++
+                            continue
                         }
                     }
-                    else -> {
-                        logger.error("Failed to get completions", e)
-                        return emptyList()
-                    }
                 }
+                logger.warn("Failed to get completions (non-retriable)", e)
+                return emptyList()
             }
         } while (attempt < maxRetries)
         return emptyList()
@@ -155,7 +162,15 @@ class KotlinLspClient : AutoCloseable {
         exit()
     }
 
-    private fun exponentialBackoffMillis(attempt: Int): Double = 1000.0 * 2.0.pow(attempt)
+    /**
+     * Basic exponential backoff with jitter (+/-30%), up to 1000ms.
+     */
+    private fun exponentialBackoffMillis(attempt: Int): Double {
+        val  base = 100.0 * 2.0.pow(attempt)
+        val jitter = Random.nextDouble(from = -0.3, until = 0.3)
+        val withJitter = base * (1.0 + jitter)
+        return withJitter.coerceAtMost(1000.0)
+    }
 
     companion object Companion {
 
