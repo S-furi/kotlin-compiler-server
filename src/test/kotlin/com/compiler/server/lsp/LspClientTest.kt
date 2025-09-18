@@ -1,8 +1,8 @@
 package com.compiler.server.lsp
 
 import com.compiler.server.AbstractCompletionTest
-import com.compiler.server.service.lsp.client.DocumentSync.openDocument
 import com.compiler.server.service.lsp.client.KotlinLspClient
+import com.compiler.server.service.lsp.client.LspClient
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.future.await
 import kotlinx.coroutines.runBlocking
@@ -83,7 +83,7 @@ class LspClientTest: AbstractCompletionTest {
             client.shutdown().await()
             client.exit()
         }
-        client = KotlinLspClient.create(workspacePath, workspaceName)
+        client = LspClient.createSingle(workspacePath, workspaceName)
     }
 
     override fun performCompletion(

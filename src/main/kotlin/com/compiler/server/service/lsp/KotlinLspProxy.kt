@@ -3,10 +3,7 @@ package com.compiler.server.service.lsp
 import com.compiler.server.compiler.components.lsp.LspProject
 import com.compiler.server.model.Project
 import com.compiler.server.model.ProjectFile
-import com.compiler.server.service.lsp.client.DocumentSync.changeDocument
-import com.compiler.server.service.lsp.client.DocumentSync.closeDocument
-import com.compiler.server.service.lsp.client.DocumentSync.openDocument
-import com.compiler.server.service.lsp.client.KotlinLspClient
+import com.compiler.server.service.lsp.client.LspClient
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -20,15 +17,15 @@ import java.nio.file.Path
 import java.util.concurrent.ConcurrentHashMap
 
 @Component
-open class KotlinLspProxy {
+class KotlinLspProxy {
 
-    internal lateinit var client: KotlinLspClient
+    internal lateinit var client: LspClient
     internal val lspProjects = ConcurrentHashMap<Project, LspProject>()
 
     @EventListener(ApplicationReadyEvent::class)
     fun initClientOnReady() {
         CoroutineScope(Dispatchers.IO).launch {
-            client = KotlinLspClient.create(
+            client = LspClient.createSingle(
                 LSP_USERS_PROJECTS_ROOT.path,
                 "kotlin-compiler-server",
             )
@@ -53,7 +50,7 @@ open class KotlinLspProxy {
         workspacePath: String = LSP_USERS_PROJECTS_ROOT.path,
         clientName: String = "kotlin-compiler-server"
     ) {
-        if (!::client.isInitialized) client = KotlinLspClient.create(workspacePath, clientName)
+        if (!::client.isInitialized) client = LspClient.createSingle(workspacePath, clientName)
     }
 
     /**
@@ -120,8 +117,6 @@ open class KotlinLspProxy {
     companion object {
         val LSP_HOST = System.getenv("LSP_HOST") ?: "127.0.0.1"
         val LSP_PORT = System.getenv("LSP_PORT")?.toInt() ?: 9999
-        val LSP_REST_ENDPOINT = "http://$LSP_HOST:$LSP_PORT"
-        val LSP_SOCKET_ENDPOINT = "ws://$LSP_HOST:$LSP_PORT"
         val LSP_USERS_PROJECTS_ROOT: URI =
             Path.of(System.getenv("LSP_USERS_PROJECTS_ROOT") ?: ("lsp-users-projects-root")).toUri()
     }
