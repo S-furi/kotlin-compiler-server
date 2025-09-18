@@ -3,12 +3,14 @@ package com.compiler.server.controllers
 import com.compiler.server.model.Project
 import com.compiler.server.service.KotlinProjectExecutor
 import com.compiler.server.service.lsp.KotlinLspProxy
+import com.compiler.server.service.lsp.StatefulKotlinLspProxy.initialisePool
 import com.compiler.server.service.lsp.StatefulKotlinLspProxy.onClientConnected
 import com.compiler.server.service.lsp.StatefulKotlinLspProxy.onClientDisconnected
 import com.fasterxml.jackson.core.JsonProcessingException
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.registerKotlinModule
 import jakarta.annotation.PreDestroy
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -53,6 +55,14 @@ class LspCompletionWebSocketHandler(
     private val completionsJob = ConcurrentHashMap<String, Job>()
     private val sessionFlows = ConcurrentHashMap<String, MutableSharedFlow<CompletionRequest>>()
 
+    private lateinit var isInitialized: CompletableDeferred<Unit>
+
+    init {
+        scope.launch {
+            isInitialized = lspProxy.initialisePool()
+        }
+    }
+
     override fun handleTextMessage(session: WebSocketSession, message: TextMessage) {
         val request = session.decodeCompletionRequestFromTextMessage(message) ?: return
         sessionFlows[session.id]?.tryEmit(request)
@@ -69,6 +79,7 @@ class LspCompletionWebSocketHandler(
 
         val completionWorker = scope.launch {
             with(session) {
+                if (!::isInitialized.isInitialized && !isInitialized.isCompleted) isInitialized.await()
                 logger.info("Lsp client connected: $id")
                 withTimeoutOrNull(10.seconds) {
                     while (!lspProxy.isLspClientConnected()) {

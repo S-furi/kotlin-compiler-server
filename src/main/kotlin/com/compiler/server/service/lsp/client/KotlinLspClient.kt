@@ -61,6 +61,8 @@ class KotlinLspClient : LspClient {
         throw ConnectException("Could not connect to LSP server after $maxLspConnectRetries attempts")
     }
 
+    override var initialized: Boolean = false
+
     override fun initRequest(kotlinProjectRoot: String, projectName: String): CompletableFuture<Void> {
         val capabilities = getCompletionCapabilities()
         val workspaceFolders = listOf(WorkspaceFolder("file://$kotlinProjectRoot", projectName))
@@ -77,6 +79,7 @@ class KotlinLspClient : LspClient {
                 logger.debug(">>> Initialization response from server:\n{}", res)
                 languageServer.initialized(InitializedParams())
                 logger.info("LSP client initialized with workspace={}, name={}", kotlinProjectRoot, projectName)
+
                 CompletableFuture.completedFuture(null)
             }
     }
@@ -136,6 +139,29 @@ class KotlinLspClient : LspClient {
         return emptyList()
     }
 
+    override fun openDocument(uri: String, content: String, version: Int, languageId: String) {
+        languageServer.textDocumentService.didOpen(
+            DidOpenTextDocumentParams(
+                TextDocumentItem(uri, languageId, version, content)
+            )
+        )
+    }
+
+    override fun changeDocument(uri: String, newContent: String, version: Int) {
+        if (uri.isEmpty()) return
+        val params = DidChangeTextDocumentParams(
+            VersionedTextDocumentIdentifier(uri, version),
+            listOf(TextDocumentContentChangeEvent(newContent)),
+        )
+        languageServer.textDocumentService.didChange(params)
+    }
+
+    override fun closeDocument(uri: String) {
+        languageServer.textDocumentService.didClose(
+            DidCloseTextDocumentParams(TextDocumentIdentifier(uri))
+        )
+    }
+
     override fun shutdown(): CompletableFuture<Any> = languageServer.shutdown()
 
     override fun exit() {
@@ -185,29 +211,4 @@ class KotlinLspClient : LspClient {
             }
             continuation.invokeOnCancellation { this.cancel(true) }
         }
-}
-
-object DocumentSync {
-    fun KotlinLspClient.openDocument(uri: String, content: String, version: Int = 1, languageId: String = "kotlin") {
-        languageServer.textDocumentService.didOpen(
-            DidOpenTextDocumentParams(
-                TextDocumentItem(uri, languageId, version, content)
-            )
-        )
-    }
-
-    fun KotlinLspClient.changeDocument(uri: String, newContent: String, version: Int = 1) {
-        if (uri.isEmpty()) return
-        val params = DidChangeTextDocumentParams(
-            VersionedTextDocumentIdentifier(uri, version),
-            listOf(TextDocumentContentChangeEvent(newContent)),
-        )
-        languageServer.textDocumentService.didChange(params)
-    }
-
-    fun KotlinLspClient.closeDocument(uri: String) {
-        languageServer.textDocumentService.didClose(
-            DidCloseTextDocumentParams(TextDocumentIdentifier(uri))
-        )
-    }
 }

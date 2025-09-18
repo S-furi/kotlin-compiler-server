@@ -1,5 +1,8 @@
 package com.compiler.server.service.lsp.client
 
+import com.compiler.server.service.lsp.client.KotlinLspClientPool.Companion.DEFAULT_POOL_SIZE
+import com.compiler.server.service.lsp.client.KotlinLspClientPool.Companion.PERMITS_PER_CLIENT
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.future.await
 import kotlinx.coroutines.runBlocking
 import org.eclipse.lsp4j.CompletionItem
@@ -7,10 +10,12 @@ import org.eclipse.lsp4j.CompletionTriggerKind
 import org.eclipse.lsp4j.Position
 import org.eclipse.lsp4j.jsonrpc.ResponseErrorException
 import org.eclipse.lsp4j.jsonrpc.messages.ResponseErrorCode
-import org.eclipse.lsp4j.jsonrpc.messages.ResponseErrorCode.RequestFailed
 import java.util.concurrent.CompletableFuture
 
 interface LspClient : AutoCloseable {
+
+    var initialized: Boolean
+
     fun initRequest(kotlinProjectRoot: String, projectName: String = "None"): CompletableFuture<Void>
 
     fun getCompletion(
@@ -34,6 +39,12 @@ interface LspClient : AutoCloseable {
         maxRetries: Int = 3,
     ): List<CompletionItem>
 
+    fun openDocument(uri: String, content: String, version: Int = 1, languageId: String = "kotlin")
+
+    fun changeDocument(uri: String, newContent: String, version: Int = 1)
+
+    fun closeDocument(uri: String)
+
     fun shutdown(): CompletableFuture<Any>
 
     fun exit()
@@ -56,10 +67,25 @@ interface LspClient : AutoCloseable {
          * @param kotlinProjectRoot the path to the workspace directory, namely the root of the common project
          * @param projectName the name of the project
          */
-        suspend fun createSingle(kotlinProjectRoot: String, projectName: String = "None"): KotlinLspClient {
+        suspend fun createSingle(kotlinProjectRoot: String, projectName: String = "None"): LspClient {
             return KotlinLspClient().apply {
                 initRequest(kotlinProjectRoot, projectName).await()
             }
+        }
+
+        suspend fun createPool(
+            kotlinProjectRoot: String,
+            projectName: String = "None",
+            nClients: Int = DEFAULT_POOL_SIZE,
+            permitsPerClient: Int = PERMITS_PER_CLIENT,
+        ): LspClient = coroutineScope {
+            KotlinLspClientPool(
+                kotlinProjectRoot = kotlinProjectRoot,
+                projectName =  projectName,
+                coroutineScope = this,
+                nClients = nClients,
+                permitsPerClient = permitsPerClient,
+            )
         }
     }
 }

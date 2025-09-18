@@ -38,8 +38,6 @@ class LspCompletionTest : BaseExecutorTest(), AbstractCompletionTest {
 
         @BeforeAll
         @JvmStatic
-        fun setUpLsp() = runBlocking {
-            lspProxy.initializeClient()
-        }
+        fun setUpLsp() = lspProxy.initClientOnReady()
     }
 }
