@@ -1,7 +1,6 @@
 package com.compiler.server.service.lsp.client
 
 import com.compiler.server.service.lsp.KotlinLspProxy
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.future.await
 import kotlinx.coroutines.runBlocking
@@ -18,6 +17,7 @@ import java.io.BufferedOutputStream
 import java.net.ConnectException
 import java.net.Socket
 import java.util.concurrent.CompletableFuture
+import java.util.concurrent.CompletionException
 import java.util.concurrent.Future
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
@@ -113,15 +113,16 @@ class KotlinLspClient : LspClient {
 
         do {
             try {
-                return withTimeout(1.5.seconds) {
+                return withTimeout(10.seconds) {
                     getCompletion(uri, position, triggerKind).awaitCancellable()
                 }
-            } catch (e: CancellationException) {
-                throw e
             } catch (e: Throwable) {
                 when (e) {
-                    is ResponseErrorException if (e.responseError.code == ResponseErrorCode.RequestFailed.value) -> {
-                        if (e.message?.startsWith("Document with url FileUrl(url='$uri'") ?: false) {
+                    is CompletionException, is ResponseErrorException -> {
+                        if ((e as? ResponseErrorException)?.responseError?.code != ResponseErrorCode.RequestFailed.value) {
+                            break
+                        }
+                        if (e.message?.contains("Document with url FileUrl(url='$uri'") ?: false) {
                             logger.info("Failed to get completions (document not ready), retrying... (${attempt + 1}/$maxRetries)")
                             delay(exponentialBackoffMillis(attempt).milliseconds)
                             attempt++
@@ -129,11 +130,34 @@ class KotlinLspClient : LspClient {
                         }
                     }
                 }
-                logger.warn("Failed to get completions (non-retriable)", e)
+                logger.warn("Failed to get completions", e)
                 return emptyList()
             }
         } while (attempt < maxRetries)
         return emptyList()
+    }
+
+    override fun openDocument(uri: String, content: String, version: Int, languageId: String) {
+        languageServer.textDocumentService.didOpen(
+            DidOpenTextDocumentParams(
+                TextDocumentItem(uri, languageId, version, content)
+            )
+        )
+    }
+
+    override fun changeDocument(uri: String, newContent: String, version: Int) {
+        if (uri.isEmpty()) return
+        val params = DidChangeTextDocumentParams(
+            VersionedTextDocumentIdentifier(uri, version),
+            listOf(TextDocumentContentChangeEvent(newContent)),
+        )
+        languageServer.textDocumentService.didChange(params)
+    }
+
+    override fun closeDocument(uri: String) {
+        languageServer.textDocumentService.didClose(
+            DidCloseTextDocumentParams(TextDocumentIdentifier(uri))
+        )
     }
 
     override fun shutdown(): CompletableFuture<Any> = languageServer.shutdown()
@@ -185,29 +209,4 @@ class KotlinLspClient : LspClient {
             }
             continuation.invokeOnCancellation { this.cancel(true) }
         }
-}
-
-object DocumentSync {
-    fun KotlinLspClient.openDocument(uri: String, content: String, version: Int = 1, languageId: String = "kotlin") {
-        languageServer.textDocumentService.didOpen(
-            DidOpenTextDocumentParams(
-                TextDocumentItem(uri, languageId, version, content)
-            )
-        )
-    }
-
-    fun KotlinLspClient.changeDocument(uri: String, newContent: String, version: Int = 1) {
-        if (uri.isEmpty()) return
-        val params = DidChangeTextDocumentParams(
-            VersionedTextDocumentIdentifier(uri, version),
-            listOf(TextDocumentContentChangeEvent(newContent)),
-        )
-        languageServer.textDocumentService.didChange(params)
-    }
-
-    fun KotlinLspClient.closeDocument(uri: String) {
-        languageServer.textDocumentService.didClose(
-            DidCloseTextDocumentParams(TextDocumentIdentifier(uri))
-        )
-    }
 }

@@ -7,7 +7,6 @@ import org.eclipse.lsp4j.CompletionTriggerKind
 import org.eclipse.lsp4j.Position
 import org.eclipse.lsp4j.jsonrpc.ResponseErrorException
 import org.eclipse.lsp4j.jsonrpc.messages.ResponseErrorCode
-import org.eclipse.lsp4j.jsonrpc.messages.ResponseErrorCode.RequestFailed
 import java.util.concurrent.CompletableFuture
 
 interface LspClient : AutoCloseable {
@@ -33,6 +32,12 @@ interface LspClient : AutoCloseable {
         triggerKind: CompletionTriggerKind = CompletionTriggerKind.Invoked,
         maxRetries: Int = 3,
     ): List<CompletionItem>
+
+    fun openDocument(uri: String, content: String, version: Int = 1, languageId: String = "kotlin")
+
+    fun changeDocument(uri: String, newContent: String, version: Int = 1)
+
+    fun closeDocument(uri: String)
 
     fun shutdown(): CompletableFuture<Any>
 
