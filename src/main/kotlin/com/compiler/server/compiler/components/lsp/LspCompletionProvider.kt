@@ -18,11 +18,11 @@ class LspCompletionProvider(
 
     context(_: KtFile)
     suspend fun complete(project: Project, line: Int, ch: Int, applyFuzzyRanking: Boolean = true): List<Completion> =
-        lspProxy.getOneTimeCompletions(project, line, ch).transformCompletions(applyFuzzyRanking)
+        lspProxy.apply { requireAvailable() }.getOneTimeCompletions(project, line, ch).transformCompletions(applyFuzzyRanking)
 
     context(_: KtFile)
     suspend fun complete(clientId: String, project: Project, line: Int, ch: Int, applyFuzzyRanking: Boolean = true): List<Completion> =
-        lspProxy.getCompletionsForClient(clientId, project, line, ch).transformCompletions(applyFuzzyRanking)
+        lspProxy.apply { requireAvailable() }.getCompletionsForClient(clientId, project, line, ch).transformCompletions(applyFuzzyRanking)
 
     context(_: KtFile)
     private fun List<CompletionItem>.transformCompletions(applyFuzzyRanking: Boolean): List<Completion> =
