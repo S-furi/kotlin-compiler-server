@@ -3,7 +3,6 @@ package com.compiler.server.controllers
 import com.compiler.server.model.*
 import com.compiler.server.model.bean.VersionInfo
 import com.compiler.server.service.KotlinProjectExecutor
-import kotlinx.coroutines.runBlocking
 import org.springframework.web.bind.annotation.*
 
 @RestController
