@@ -1,6 +1,7 @@
 package com.compiler.server.service.lsp.client
 
 import com.compiler.server.service.lsp.KotlinLspProxy
+import com.compiler.server.service.lsp.client.LspConnectionManager.Companion.exponentialBackoffMillis
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.future.await
 import kotlinx.coroutines.runBlocking
@@ -9,56 +10,48 @@ import kotlinx.coroutines.withTimeout
 import org.eclipse.lsp4j.*
 import org.eclipse.lsp4j.jsonrpc.ResponseErrorException
 import org.eclipse.lsp4j.jsonrpc.messages.ResponseErrorCode
-import org.eclipse.lsp4j.launch.LSPLauncher
 import org.eclipse.lsp4j.services.LanguageServer
 import org.slf4j.LoggerFactory
-import java.io.BufferedInputStream
-import java.io.BufferedOutputStream
-import java.net.ConnectException
-import java.net.Socket
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CompletionException
-import java.util.concurrent.Future
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
-import kotlin.math.pow
-import kotlin.random.Random
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
 class KotlinLspClient : LspClient {
 
-    private val languageClient = KotlinLanguageClient()
-    internal val languageServer: LanguageServer by lazy { getRemoteLanguageServer() }
-    private lateinit var stopFuture: Future<Void>
     private val logger = LoggerFactory.getLogger(this::class.java)
+    private val connectionManager = LspConnectionManager(
+        host = KotlinLspProxy.LSP_HOST,
+        port = KotlinLspProxy.LSP_PORT,
+    )
 
-    private val maxLspConnectRetries = 5
-    private val socket by lazy {
-        var attempt = 0
-        do {
-            try {
-                return@lazy Socket(KotlinLspProxy.LSP_HOST, KotlinLspProxy.LSP_PORT).apply {
-                    tcpNoDelay = true
-                    keepAlive = true
-                    soTimeout = 0
-                    receiveBufferSize = 256 * 1024
-                    sendBufferSize = 256 * 1024
-                    setPerformancePreferences(0, 2, 1)
-                }
-            } catch (e: Exception) {
-                when (e) {
-                    is ConnectException -> {
-                        logger.info("Connection to LSP server failed, retrying... ($attempt / $maxLspConnectRetries)")
-                        Thread.sleep(exponentialBackoffMillis(attempt).toLong())
-                        attempt++
-                    }
+    private val disconnectListeners = mutableListOf<() -> Unit>()
+    private val reconnectListeners = mutableListOf<() -> Unit>()
 
-                    else -> throw e
-                }
+    private val languageServer: LanguageServer
+        get() = connectionManager.ensureConnected()
+
+    private lateinit var initParams: InitializeParams
+
+    init {
+        connectionManager.addOnDisconnectListener {
+            logger.warn("Lost connection to LSP server, reconnecting...")
+            disconnectListeners.forEach { runCatching { it() } }
+        }
+
+        connectionManager.addOnReconnectListener {
+            logger.info("Reconnected to LSP server, re-initializing client")
+            if (::initParams.isInitialized) {
+                runCatching {
+                    languageServer.initialize(initParams).join()
+                    languageServer.initialized(InitializedParams())
+                    logger.info("LSP client re-initialized")
+                }.onFailure { logger.warn("Re-initialize LSP client failed: ${it.message}") }
             }
-        } while (attempt < maxLspConnectRetries)
-        throw ConnectException("Could not connect to LSP server after $maxLspConnectRetries attempts")
+        }
+        reconnectListeners.forEach { runCatching { it() } }
     }
 
     override fun initRequest(kotlinProjectRoot: String, projectName: String): CompletableFuture<Void> {
@@ -77,6 +70,7 @@ class KotlinLspClient : LspClient {
                 logger.debug(">>> Initialization response from server:\n{}", res)
                 languageServer.initialized(InitializedParams())
                 logger.info("LSP client initialized with workspace={}, name={}", kotlinProjectRoot, projectName)
+                initParams = params
                 CompletableFuture.completedFuture(null)
             }
     }
@@ -163,9 +157,8 @@ class KotlinLspClient : LspClient {
     override fun shutdown(): CompletableFuture<Any> = languageServer.shutdown()
 
     override fun exit() {
-        languageServer.exit()
-        stopFuture.cancel(true)
-        socket.close()
+        runCatching { languageServer.exit() }
+        connectionManager.close()
     }
 
     private fun getCompletionCapabilities() = ClientCapabilities().apply {
@@ -178,27 +171,9 @@ class KotlinLspClient : LspClient {
         workspace = WorkspaceClientCapabilities().apply { workspaceFolders = true }
     }
 
-    private fun getRemoteLanguageServer(): LanguageServer {
-        val input = BufferedInputStream(socket.getInputStream(), 256 * 1024)
-        val output = BufferedOutputStream(socket.getOutputStream(), 256 * 1024)
-        val launcher = LSPLauncher.createClientLauncher(languageClient, input, output)
-        stopFuture = launcher.startListening()
-        return launcher?.remoteProxy ?: throw RuntimeException("Cannot connect to server")
-    }
-
     override fun close() = runBlocking {
         shutdown().await()
         exit()
-    }
-
-    /**
-     * Basic exponential backoff with jitter (+/-30%), up to 1000ms.
-     */
-    private fun exponentialBackoffMillis(attempt: Int): Double {
-        val base = 100.0 * 2.0.pow(attempt)
-        val jitter = Random.nextDouble(from = -0.3, until = 0.3)
-        val withJitter = base * (1.0 + jitter)
-        return withJitter.coerceAtMost(500.0)
     }
 
     private suspend fun <T> CompletableFuture<T>.awaitCancellable(): T =
