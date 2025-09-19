@@ -72,12 +72,12 @@ internal class LspConnectionManager(
                 return
             } catch (e: Exception) {
                 if (e is ConnectException || e.cause is ConnectException) {
-                    logger.info("Could not connect to LSP server: ${e.message}")
+                    logger.debug("Could not connect to LSP server: ${e.message}")
                 } else {
                     logger.warn("Unexpected error while connecting to LSP server:", e)
                 }
                 Thread.sleep(exponentialBackoffMillis(attempt++).toLong())
-                logger.info("Trying reconnect, attempt {} of {}", attempt, maxConnectionRetries)
+                logger.debug("Trying reconnect, attempt {} of {}", attempt, maxConnectionRetries)
             }
         }
         throw ConnectException("Could not connect to LSP server after $maxConnectionRetries attempts")
@@ -148,13 +148,24 @@ internal class LspConnectionManager(
     companion object {
 
         /**
-         * Basic exponential backoff with jitter (+/-30%), up to 1000ms.
+         * Basic exponential backoff starting from [base]ms with jitter (+/-[jitterFactor]%), up to [maxVal]ms
+         *
+         * @param attempt The attempt number (starting at 0)
+         * @param base The base value in millis
+         * @param maxVal The maximum value in millis
+         * @param jitterFactor The jitter factor (0.0 to 1.0)
+         * @return The exponential backoff value in milliseconds
          */
-        internal fun exponentialBackoffMillis(attempt: Int): Double {
-            val base = 100.0 * 2.0.pow(attempt)
-            val jitter = Random.nextDouble(from = -0.3, until = 0.3)
-            val withJitter = base * (1.0 + jitter)
-            return withJitter.coerceAtMost(500.0)
+        internal fun exponentialBackoffMillis(
+            attempt: Int,
+            base: Double = 100.0,
+            maxVal: Double = 5 * base,
+            jitterFactor: Double = 0.3
+        ): Double {
+            val backoff = base * 2.0.pow(attempt)
+            val jitter = Random.nextDouble(from = -jitterFactor, until = jitterFactor)
+            val withJitter = backoff * (1.0 + jitter)
+            return withJitter.coerceAtMost(maxVal)
         }
     }
 }

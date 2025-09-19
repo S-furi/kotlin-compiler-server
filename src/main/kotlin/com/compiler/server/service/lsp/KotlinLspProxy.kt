@@ -135,8 +135,8 @@ class KotlinLspProxy {
             try {
                 initializeClient(LSP_USERS_PROJECTS_ROOT.path, "kotlin-complier-server")
                 return
-            } catch (e: Exception) {
-                delay(LspConnectionManager.exponentialBackoffMillis(attempt++).milliseconds)
+            } catch (_: Exception) {
+                delay(LspConnectionManager.exponentialBackoffMillis(attempt = attempt++, base = 1000.0).milliseconds)
             }
         }
     }
