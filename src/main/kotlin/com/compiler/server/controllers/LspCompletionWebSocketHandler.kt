@@ -15,11 +15,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -65,8 +62,8 @@ class LspCompletionWebSocketHandler(
         activeSession[session.id] = session
 
         val flow =  MutableSharedFlow<CompletionRequest>(
-            extraBufferCapacity = 1,
-            onBufferOverflow = BufferOverflow.DROP_OLDEST,
+//            extraBufferCapacity = 1,
+//            onBufferOverflow = BufferOverflow.DROP_OLDEST,
         ).also { sessionFlows[session.id] = it }
 
         val completionWorker = scope.launch {
@@ -82,8 +79,9 @@ class LspCompletionWebSocketHandler(
             }
 
             flow
-                .debounce { 200.milliseconds } // TODO: define a heuristic for average typing speed + frontend debounce
-                .collectLatest { req ->
+//                .debounce { 200.milliseconds } // TODO: define a heuristic for average typing speed + frontend debounce
+//                .collectLatest { req ->
+                .collect { req ->
                     val res = kotlinProjectExecutor.completeWithLsp(
                         clientId = session.id,
                         project = req.project,
