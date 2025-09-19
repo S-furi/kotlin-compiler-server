@@ -186,7 +186,7 @@ object StatefulKotlinLspProxy {
     }
 
     fun KotlinLspProxy.onClientConnected(clientId: String) {
-        val project = Project(files = listOf(ProjectFile(name = "$client.kt"))).also { clientsProjects[clientId] = it }
+        val project = Project(files = listOf(ProjectFile(name = "$clientId.kt"))).also { clientsProjects[clientId] = it }
         val lspProject = LspProject.fromProject(project).also { lspProjects[project] = it }
         lspProject.getDocumentsUris().forEach { uri -> client.openDocument(uri, "") }
     }
