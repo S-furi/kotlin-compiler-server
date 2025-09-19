@@ -1,12 +1,15 @@
 package com.compiler.server
 
 import com.compiler.server.base.BaseExecutorTest
+import com.compiler.server.lsp.utils.LspIntegrationTestUtils
+import com.compiler.server.lsp.utils.RequireLspServerCondition
 import com.compiler.server.model.Project
 import com.compiler.server.model.ProjectFile
 import com.compiler.server.service.lsp.KotlinLspProxy
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.BeforeAll
 import kotlin.test.Ignore
+import org.junit.jupiter.api.extension.ExtendWith
 
 // TODO(Dmitrii Krasnov): this test is disabled until KTL-2807 is fixed
 @Ignore
@@ -16,6 +19,8 @@ class CompletionTest : BaseExecutorTest(), AbstractCompletionTest {
   }
 }
 
+@LspIntegrationTestUtils.RequireLspServer
+@ExtendWith(RequireLspServerCondition::class)
 class LspCompletionTest : BaseExecutorTest(), AbstractCompletionTest {
 
     override fun performCompletion(
