@@ -19,7 +19,7 @@ import kotlin.coroutines.resumeWithException
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
-class KotlinLspClient : LspClient {
+class KotlinLspClient : RetriableLspClient {
 
     private val logger = LoggerFactory.getLogger(this::class.java)
     private val connectionManager = LspConnectionManager(
@@ -184,4 +184,12 @@ class KotlinLspClient : LspClient {
             }
             continuation.invokeOnCancellation { this.cancel(true) }
         }
+
+    override fun addOnDisconnectListener(listener: () -> Unit) {
+        disconnectListeners += listener
+    }
+
+    override fun addOnReconnectListener(listener: () -> Unit) {
+        reconnectListeners += listener
+    }
 }

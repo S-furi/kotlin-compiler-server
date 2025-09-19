@@ -54,12 +54,14 @@ class LspCompletionWebSocketHandler(
     private val sessionFlows = ConcurrentHashMap<String, MutableSharedFlow<CompletionRequest>>()
 
     override fun handleTextMessage(session: WebSocketSession, message: TextMessage) {
+        lspProxy.requireAvailable()
         val request = session.decodeCompletionRequestFromTextMessage(message) ?: return
         sessionFlows[session.id]?.tryEmit(request)
     }
 
     @OptIn(FlowPreview::class)
     override fun afterConnectionEstablished(session: WebSocketSession) {
+        lspProxy.requireAvailable()
         activeSession[session.id] = session
 
         val flow =  MutableSharedFlow<CompletionRequest>(
