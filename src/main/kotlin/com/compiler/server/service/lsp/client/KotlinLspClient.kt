@@ -63,7 +63,7 @@ class KotlinLspClient : RetriableLspClient {
             this.workspaceFolders = workspaceFolders
         }
 
-        logger.info("Initializing LSP client...")
+        logger.debug("Initializing LSP client...")
 
         return languageServer.initialize(params)
             .thenCompose { res ->
@@ -118,7 +118,7 @@ class KotlinLspClient : RetriableLspClient {
                         }
                         if (e.message?.contains("Document with url FileUrl(url='$uri'") ?: false) {
                             logger.info("Failed to get completions (document not ready), retrying... (${attempt + 1}/$maxRetries)")
-                            delay(exponentialBackoffMillis(attempt).milliseconds)
+                            delay(exponentialBackoffMillis(attempt = attempt, base = 1000.0).milliseconds)
                             attempt++
                             continue
                         }
