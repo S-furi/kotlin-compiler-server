@@ -42,7 +42,7 @@ class KotlinLspClient : RetriableLspClient {
         }
 
         connectionManager.addOnReconnectListener {
-            logger.info("Reconnected to LSP server, re-initializing client")
+            logger.info("Reconnected to LSP server, re-initializing client...")
             if (::initParams.isInitialized) {
                 runCatching {
                     languageServer.initialize(initParams).join()
