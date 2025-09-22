@@ -69,6 +69,7 @@ internal class LspConnectionManager(
                 socket = s
                 serverProxy = launcher.remoteProxy
                 if (!initial) notifyReconnected()
+                logger.info("Connected to LSP server")
                 return
             } catch (e: Exception) {
                 if (e is ConnectException || e.cause is ConnectException) {
