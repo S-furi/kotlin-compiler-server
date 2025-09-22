@@ -21,13 +21,13 @@ import kotlin.coroutines.resumeWithException
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
-class KotlinLspClient : RetriableLspClient {
+class KotlinLspClient(
+    host: String = LspConnectionManager.LSP_HOST,
+    port: Int = LspConnectionManager.LSP_PORT,
+) : RetriableLspClient {
 
     private val logger = LoggerFactory.getLogger(this::class.java)
-    private val connectionManager = LspConnectionManager(
-        host = KotlinLspProxy.LSP_HOST,
-        port = KotlinLspProxy.LSP_PORT,
-    )
+    private val connectionManager = LspConnectionManager(host, port)
 
     private val disconnectListeners = mutableListOf<() -> Unit>()
     private val reconnectListeners = mutableListOf<() -> Unit>()

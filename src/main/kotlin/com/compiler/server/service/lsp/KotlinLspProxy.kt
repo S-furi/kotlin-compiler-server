@@ -157,8 +157,6 @@ class KotlinLspProxy {
     }
 
     companion object {
-        val LSP_HOST = System.getenv("LSP_HOST") ?: "127.0.0.1"
-        val LSP_PORT = System.getenv("LSP_PORT")?.toInt() ?: 9999
         val LSP_USERS_PROJECTS_ROOT: URI =
             Path.of(System.getenv("LSP_USERS_PROJECTS_ROOT") ?: ("lsp-users-projects-root")).toUri()
     }

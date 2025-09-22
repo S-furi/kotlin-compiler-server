@@ -20,8 +20,8 @@ import kotlin.random.Random
 
 
 internal class LspConnectionManager(
-    private val host: String,
-    private val port: Int,
+    private val host: String = LSP_HOST,
+    private val port: Int = LSP_PORT,
     private val languageClient: LanguageClient = KotlinLanguageClient(),
     private val maxConnectionRetries: Int = 5,
 ): AutoCloseable {
@@ -147,6 +147,8 @@ internal class LspConnectionManager(
     }
 
     companion object {
+        val LSP_HOST = System.getenv("LSP_HOST") ?: "127.0.0.1"
+        val LSP_PORT = System.getenv("LSP_PORT")?.toInt() ?: 9999
 
         /**
          * Basic exponential backoff starting from [base]ms with jitter (+/-[jitterFactor]%), up to [maxVal]ms
