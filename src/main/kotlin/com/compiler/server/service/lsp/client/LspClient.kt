@@ -12,6 +12,10 @@ import java.util.concurrent.CompletableFuture
 interface LspClient : AutoCloseable {
     fun initRequest(kotlinProjectRoot: String, projectName: String = "None"): CompletableFuture<Void>
 
+    suspend fun awaitReady()
+
+    fun isReady(): Boolean
+
     fun getCompletion(
         uri: String,
         position: Position,

@@ -68,18 +68,17 @@ class LspCompletionWebSocketHandler(
         val completionWorker = scope.launch {
             with(session) {
                 logger.info("Lsp client connected: $id")
-                withTimeoutOrNull(LSP_TIMEOUT_WAIT_TIME) {
-                    while (!lspProxy.isAvailable()) {
-                        delay(LSP_TIMEOUT_POLL_INTERVAL)
-                    }
-                } ?: sendResponse(Response.Error("Proxy is still not connected to Language server"))
+                runCatching {
+                    lspProxy.requireAvailable()
+                }.onFailure {
+                    sendResponse(Response.Error("Proxy is still not connected to Language server"))
+                    return@launch
+                }
                 lspProxy.onClientConnected(id)
                 sendResponse(Response.Init(id))
             }
 
             flow
-//                .debounce { 200.milliseconds } // TODO: define a heuristic for average typing speed + frontend debounce
-//                .collectLatest { req ->
                 .collect { req ->
                     val available = withTimeoutOrNull(LSP_TIMEOUT_WAIT_TIME) {
                         while (!lspProxy.isAvailable()) {
