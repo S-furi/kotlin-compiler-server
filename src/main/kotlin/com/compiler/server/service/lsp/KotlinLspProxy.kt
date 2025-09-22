@@ -36,8 +36,6 @@ class KotlinLspProxy {
         }
     }
 
-    fun isLspClientConnected(): Boolean = ::client.isInitialized
-
     fun isAvailable(): Boolean = available.get()
 
     fun requireAvailable() {
