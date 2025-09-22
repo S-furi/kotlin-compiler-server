@@ -12,9 +12,10 @@ ENV PATH="$SDKMAN_DIR/candidates/kotlin/current/bin:$PATH"
 
 COPY lsp-users-projects-root/ /lsp-users-projects-root/
 WORKDIR /lsp
-COPY server/kotlin-lsp-0.0.1-SNAPSHOT-linux-aarch64.zip .
-RUN unzip kotlin-lsp-0.0.1-SNAPSHOT-linux-aarch64.zip \
-    && rm kotlin-lsp-0.0.1-SNAPSHOT-linux-aarch64.zip \
+ARG LSP_ZIP=intellij-lsp-0.0.1-SNAPSHOT-linux-aarch64.zip
+COPY server/${LSP_ZIP} .
+RUN unzip ${LSP_ZIP} \
+    && rm ${LSP_ZIP} \
     && chmod +x ./kotlin-lsp.sh
 
 EXPOSE 9999
