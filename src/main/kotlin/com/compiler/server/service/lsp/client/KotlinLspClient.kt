@@ -1,7 +1,7 @@
 package com.compiler.server.service.lsp.client
 
-import com.compiler.server.service.lsp.KotlinLspProxy
 import com.compiler.server.service.lsp.client.LspConnectionManager.Companion.exponentialBackoffMillis
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.future.await
@@ -135,6 +135,9 @@ class KotlinLspClient(
                             attempt++
                             continue
                         }
+                    }
+                    is CancellationException -> {
+                        return emptyList()
                     }
                 }
                 logger.warn("Failed to get completions", e)
