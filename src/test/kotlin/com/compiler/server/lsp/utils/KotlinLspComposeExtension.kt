@@ -24,5 +24,6 @@ internal class KotlinLspComposeExtension: BeforeAllCallback, ExtensionContext.St
     companion object {
         private var started = false
         lateinit var container: ComposeContainer
+        val lspPort: Int by lazy { container.getServicePort("kotlin-lsp", 9999) }
     }
 }
