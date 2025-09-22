@@ -138,7 +138,7 @@ class LspCompletionWebSocketHandler(
                 }
             }
         } catch (e: Exception) {
-            logger.error("Error sending message to client $id:", e)
+            logger.warn("Error sending message to client $id:", e.message)
         }
     }
 
