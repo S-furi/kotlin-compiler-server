@@ -96,7 +96,7 @@ class LspCompletionProviderTest {
                 .expectStatus().isOk
                 .expectBodyList(Completion::class.java)
                 .returnResult()
-                .responseBody?.also { println(it) }
+                .responseBody
         } ?: emptyList()
     }
 
