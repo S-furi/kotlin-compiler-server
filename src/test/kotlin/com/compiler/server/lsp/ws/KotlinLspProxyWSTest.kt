@@ -60,8 +60,12 @@ class KotlinLspProxyWSTest: AbstractCompletionTest {
         session.sendMessage(TextMessage(objectMapper.writeValueAsString(msg)))
         val completions = handler.receiveCompletions()
         val asserts = expectedCompletions.map { expected ->
-            completions.any { received -> received.contains(expected) }
-        }.map { pred -> { assertTrue(pred) } }
+            {
+                assertTrue(completions.any { received ->
+                    received.contains(expected)
+                }, "Expected to find $expected in $completions")
+            }
+        }
         assertAll(asserts)
     }
 
