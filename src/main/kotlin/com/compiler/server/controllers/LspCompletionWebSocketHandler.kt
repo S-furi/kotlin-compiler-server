@@ -15,6 +15,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.launch
@@ -51,27 +52,25 @@ class LspCompletionWebSocketHandler(
     private val sessionFlows = ConcurrentHashMap<String, MutableSharedFlow<CompletionRequest>>()
 
     override fun handleTextMessage(session: WebSocketSession, message: TextMessage) {
-        lspProxy.requireAvailable()
         val request = session.decodeCompletionRequestFromTextMessage(message) ?: return
         scope.launch { sessionFlows[session.id]?.emit(request) }
     }
 
     @OptIn(FlowPreview::class)
     override fun afterConnectionEstablished(session: WebSocketSession) {
-        lspProxy.requireAvailable()
         activeSession[session.id] = session
 
         val flow =  MutableSharedFlow<CompletionRequest>(
-//            extraBufferCapacity = 1,
-//            onBufferOverflow = BufferOverflow.DROP_OLDEST,
+            extraBufferCapacity = 16,
+            onBufferOverflow = BufferOverflow.DROP_OLDEST,
         ).also { sessionFlows[session.id] = it }
 
         val completionWorker = scope.launch {
             with(session) {
                 logger.info("Lsp client connected: $id")
-                withTimeoutOrNull(10.seconds) {
-                    while (!lspProxy.isLspClientConnected()) {
-                        delay(500.milliseconds)
+                withTimeoutOrNull(LSP_TIMEOUT_WAIT_TIME) {
+                    while (!lspProxy.isAvailable()) {
+                        delay(LSP_TIMEOUT_POLL_INTERVAL)
                     }
                 } ?: sendResponse(Response.Error("Proxy is still not connected to Language server"))
                 lspProxy.onClientConnected(id)
@@ -82,13 +81,30 @@ class LspCompletionWebSocketHandler(
 //                .debounce { 200.milliseconds } // TODO: define a heuristic for average typing speed + frontend debounce
 //                .collectLatest { req ->
                 .collect { req ->
-                    val res = kotlinProjectExecutor.completeWithLsp(
-                        clientId = session.id,
-                        project = req.project,
-                        line = req.line,
-                        character = req.ch
-                    )
-                    session.sendResponse(Response.Completions(res))
+                    val available = withTimeoutOrNull(LSP_TIMEOUT_WAIT_TIME) {
+                        while (!lspProxy.isAvailable()) {
+                            delay(LSP_TIMEOUT_POLL_INTERVAL)
+                        }
+                        true
+                    } ?: false
+
+                    if (!available) {
+                        session.sendResponse(Response.Error("LSP not available"))
+                        return@collect
+                    }
+
+                    try {
+                        val res = kotlinProjectExecutor.completeWithLsp(
+                            clientId = session.id,
+                            project = req.project,
+                            line = req.line,
+                            character = req.ch
+                        )
+                        session.sendResponse(Response.Completions(res))
+                    } catch (e: Exception) {
+                        logger.warn("Completion processing failed for client ${session.id}:", e)
+                        session.sendResponse(Response.Error("Completion failed: ${e.message}"))
+                    }
                 }
         }
         completionWorker.invokeOnCompletion { completionsJob.remove(session.id) }
@@ -144,6 +160,8 @@ class LspCompletionWebSocketHandler(
 
     companion object {
         internal val objectMapper = ObjectMapper().apply { registerKotlinModule() }
+        private val LSP_TIMEOUT_WAIT_TIME = 10.seconds
+        private val LSP_TIMEOUT_POLL_INTERVAL = 100.milliseconds
     }
 }
 
