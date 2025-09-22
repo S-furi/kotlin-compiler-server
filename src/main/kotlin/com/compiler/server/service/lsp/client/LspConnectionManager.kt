@@ -76,7 +76,7 @@ internal class LspConnectionManager(
                 } else {
                     logger.warn("Unexpected error while connecting to LSP server:", e)
                 }
-                Thread.sleep(exponentialBackoffMillis(attempt++).toLong())
+                Thread.sleep(exponentialBackoffMillis(attempt++, base = 1000.0).toLong())
                 logger.debug("Trying reconnect, attempt {} of {}", attempt, maxConnectionRetries)
             }
         }
