@@ -42,14 +42,14 @@ internal class LspConnectionManager(
     private val reconnectListeners = mutableListOf<() -> Unit>()
 
     @Synchronized
-    fun ensureConnected(): LanguageServer {
+    fun ensureConnected(initial: Boolean = true): LanguageServer {
         if (isClosing.get()) error("Connection manager is closing or already closed")
         serverProxy?.let { return it }
-        connect()
+        connect(initial)
         return serverProxy ?: error("Could not connect to LSP server")
     }
 
-    private fun connect() {
+    private fun connect(initial: Boolean = false) {
         var attempt = 0
         while (attempt < maxConnectionRetries && !isClosing.get()) {
             try {
@@ -68,16 +68,16 @@ internal class LspConnectionManager(
                 }
                 socket = s
                 serverProxy = launcher.remoteProxy
-                notifyReconnected()
+                if (!initial) notifyReconnected()
                 return
             } catch (e: Exception) {
                 if (e is ConnectException || e.cause is ConnectException) {
-                    logger.debug("Could not connect to LSP server: ${e.message}")
+                    logger.info("Could not connect to LSP server: ${e.message}")
                 } else {
                     logger.warn("Unexpected error while connecting to LSP server:", e)
                 }
                 Thread.sleep(exponentialBackoffMillis(attempt++, base = 1000.0).toLong())
-                logger.debug("Trying reconnect, attempt {} of {}", attempt, maxConnectionRetries)
+                logger.info("Trying reconnect, attempt {} of {}", attempt, maxConnectionRetries)
             }
         }
         throw ConnectException("Could not connect to LSP server after $maxConnectionRetries attempts")

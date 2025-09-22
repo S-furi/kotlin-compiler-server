@@ -2,6 +2,7 @@ package com.compiler.server.service.lsp.client
 
 import com.compiler.server.service.lsp.KotlinLspProxy
 import com.compiler.server.service.lsp.client.LspConnectionManager.Companion.exponentialBackoffMillis
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.future.await
 import kotlinx.coroutines.runBlocking
@@ -14,6 +15,7 @@ import org.eclipse.lsp4j.services.LanguageServer
 import org.slf4j.LoggerFactory
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CompletionException
+import java.util.concurrent.atomic.AtomicReference
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 import kotlin.time.Duration.Companion.milliseconds
@@ -35,23 +37,33 @@ class KotlinLspClient : RetriableLspClient {
 
     private lateinit var initParams: InitializeParams
 
+    private val readyState = ReadyState()
+
     init {
+        readyState.reset()
+
         connectionManager.addOnDisconnectListener {
             logger.warn("Lost connection to LSP server, reconnecting...")
+            readyState.reset()
             disconnectListeners.forEach { runCatching { it() } }
         }
 
         connectionManager.addOnReconnectListener {
-            logger.info("Reconnected to LSP server, re-initializing client...")
+            logger.debug("Reconnected to LSP server, re-initializing client...")
             if (::initParams.isInitialized) {
                 runCatching {
                     languageServer.initialize(initParams).join()
                     languageServer.initialized(InitializedParams())
-                    logger.info("LSP client re-initialized")
-                }.onFailure { logger.warn("Re-initialize LSP client failed: ${it.message}") }
+                    logger.debug("LSP client re-initialized")
+                    readyState.complete()
+                }.onFailure {
+                    logger.warn("Re-initialize LSP client failed: ${it.message}")
+                    readyState.fail(it)
+                }
             }
+            reconnectListeners.forEach { runCatching { it() } }
         }
-        reconnectListeners.forEach { runCatching { it() } }
+        connectionManager.ensureConnected(initial = true)
     }
 
     override fun initRequest(kotlinProjectRoot: String, projectName: String): CompletableFuture<Void> {
@@ -71,6 +83,7 @@ class KotlinLspClient : RetriableLspClient {
                 languageServer.initialized(InitializedParams())
                 logger.info("LSP client initialized with workspace={}, name={}", kotlinProjectRoot, projectName)
                 initParams = params
+                readyState.complete()
                 CompletableFuture.completedFuture(null)
             }
     }
@@ -176,14 +189,12 @@ class KotlinLspClient : RetriableLspClient {
         exit()
     }
 
-    private suspend fun <T> CompletableFuture<T>.awaitCancellable(): T =
-        suspendCancellableCoroutine { continuation ->
-            this.whenComplete { value, throwable ->
-                if (throwable == null) continuation.resume(value)
-                else continuation.resumeWithException(throwable)
-            }
-            continuation.invokeOnCancellation { this.cancel(true) }
-        }
+    override suspend fun awaitReady() {
+        readyState.awaitReady()
+    }
+
+    override fun isReady(): Boolean = readyState.isReady()
+
 
     override fun addOnDisconnectListener(listener: () -> Unit) {
         disconnectListeners += listener
@@ -192,4 +203,34 @@ class KotlinLspClient : RetriableLspClient {
     override fun addOnReconnectListener(listener: () -> Unit) {
         reconnectListeners += listener
     }
+
+    private suspend fun <T> CompletableFuture<T>.awaitCancellable(): T =
+        suspendCancellableCoroutine { continuation ->
+            this.whenComplete { value, throwable ->
+                if (throwable == null) continuation.resume(value)
+                else continuation.resumeWithException(throwable)
+            }
+            continuation.invokeOnCancellation { this.cancel(true) }
+        }
+}
+
+private data class ReadyState(
+    private val ready: AtomicReference<CompletableDeferred<Unit>> = AtomicReference(CompletableDeferred()),
+) {
+
+    @Synchronized
+    fun reset(): CompletableDeferred<Unit> {
+        ready.set(CompletableDeferred())
+        return ready.get()
+    }
+
+    @Synchronized
+    fun complete() = ready.get().complete(Unit)
+
+    @Synchronized
+    fun fail(t: Throwable) = ready.get().completeExceptionally(t)
+
+    suspend fun awaitReady() = ready.get().await()
+
+    fun isReady() = ready.get().isCompleted
 }

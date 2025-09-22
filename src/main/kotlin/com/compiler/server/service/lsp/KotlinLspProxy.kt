@@ -4,15 +4,15 @@ import com.compiler.server.compiler.components.lsp.LspProject
 import com.compiler.server.model.Project
 import com.compiler.server.model.ProjectFile
 import com.compiler.server.service.lsp.client.LspClient
-import com.compiler.server.service.lsp.client.LspConnectionManager
 import com.compiler.server.service.lsp.client.RetriableLspClient
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.eclipse.lsp4j.CompletionItem
 import org.eclipse.lsp4j.Position
+import org.jetbrains.kotlin.ir.util.toIrConst
 import org.springframework.boot.context.event.ApplicationReadyEvent
 import org.springframework.context.event.EventListener
 import org.springframework.stereotype.Component
@@ -20,7 +20,6 @@ import java.net.URI
 import java.nio.file.Path
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
-import kotlin.time.Duration.Companion.milliseconds
 
 @Component
 class KotlinLspProxy {
@@ -29,49 +28,15 @@ class KotlinLspProxy {
     internal val lspProjects = ConcurrentHashMap<Project, LspProject>()
 
     private val available = AtomicBoolean(false)
-    private val initializedDeferred = CompletableDeferred<Unit>()
+    private var lspClientInitializedDeferred = CompletableDeferred<Unit>()
+
+    private val proxyCoroutineScope =
+        CoroutineScope(Dispatchers.IO + CoroutineName("KotlinLspProxy"))
 
     @EventListener(ApplicationReadyEvent::class)
     fun initClientOnReady() {
-        CoroutineScope(Dispatchers.IO).launch {
-            startOrRetryClient()
-        }
-    }
-
-    fun isAvailable(): Boolean = available.get()
-
-    suspend fun requireAvailable() {
-        if (!isAvailable() && !initializedDeferred.isCompleted) {
-            try {
-                initializedDeferred.await()
-            } catch (_: Exception) {
-                throw LspUnavailableException()
-            }
-        }
-        if (!isAvailable()) throw LspUnavailableException()
-    }
-
-    /**
-     * Initialize the LSP client. This method must be called before any other method in this
-     * class. It is recommended to call this method when the **spring** application context is initialized.
-     *
-     * [workspacePath] is the path ([[java.net.URI.path]]) to the root project directory,
-     * where the project must be a project supported by [Kotlin-LSP](https://github.com/Kotlin/kotlin-lsp).
-     * The workspace will not contain users' files, but it can be used to store common files,
-     * to specify kotlin/java versions, project-wide imported libraries and so on.
-     *
-     * @param workspacePath the path to the workspace directory, namely the root of the common project
-     * @param clientName the name of the client, defaults to "lsp-proxy"
-     */
-    suspend fun initializeClient(
-        workspacePath: String = LSP_USERS_PROJECTS_ROOT.path,
-        clientName: String = "kotlin-compiler-server"
-    ) {
-        if (!::client.isInitialized) {
-            client = LspClient.createSingle(workspacePath, clientName)
-            wireAvailabilityObservers(client)
-            available.set(true)
-            initializedDeferred.complete(Unit)
+        proxyCoroutineScope.launch {
+            initializeClient()
         }
     }
 
@@ -88,7 +53,7 @@ class KotlinLspProxy {
      * @return a list of [CompletionItem]s
      */
     suspend fun getOneTimeCompletions(project: Project, line: Int, ch: Int): List<CompletionItem> {
-        runCatching { requireAvailable() }.onFailure { return emptyList() }
+        ensureLspClientReady() ?: return emptyList()
         val lspProject = lspProjects.getOrPut(project) { createNewProject(project) }
         val projectFile = project.files.first() // we assume projects can have just a single file
         val uri = lspProject.getDocumentUri(projectFile.name) ?: return emptyList()
@@ -123,6 +88,53 @@ class KotlinLspProxy {
         return client.getCompletionsWithRetry(uri, Position(line, ch))
     }
 
+    /**
+     * Initialize the LSP client. This method must be called before any other method in this
+     * class. It is recommended to call this method when the **spring** application context is initialized.
+     *
+     * [workspacePath] is the path ([[java.net.URI.path]]) to the root project directory,
+     * where the project must be a project supported by [Kotlin-LSP](https://github.com/Kotlin/kotlin-lsp).
+     * The workspace will not contain users' files, but it can be used to store common files,
+     * to specify kotlin/java versions, project-wide imported libraries and so on.
+     *
+     * @param workspacePath the path to the workspace directory, namely the root of the common project
+     * @param clientName the name of the client, defaults to "lsp-proxy"
+     */
+    suspend fun initializeClient(
+        workspacePath: String = LSP_USERS_PROJECTS_ROOT.path,
+        clientName: String = "kotlin-compiler-server"
+    ) {
+        if (!::client.isInitialized) {
+            client = LspClient.createSingle(workspacePath, clientName)
+            wireAvailabilityObservers(client)
+            available.set(true)
+            lspClientInitializedDeferred.complete(Unit)
+        }
+    }
+
+    fun isAvailable(): Boolean = available.get()
+
+    suspend fun requireAvailable() {
+        if (!isAvailable()) {
+            try {
+                if (!lspClientInitializedDeferred.isCompleted) {
+                    lspClientInitializedDeferred.await()
+                }
+                client.awaitReady()
+                available.set(true)
+            } catch (e: Exception) {
+                println("Qualcosa è andato storto durante l'inizializzazione del client LSP + $e")
+                e.printStackTrace()
+                throw LspUnavailableException()
+            }
+        }
+    }
+
+    internal suspend fun ensureLspClientReady(): Boolean? =
+        runCatching { requireAvailable() ; true}.onFailure {
+            if (it is LspUnavailableException) throw it
+        }.getOrDefault(false)
+
     private fun createNewProject(project: Project): LspProject = LspProject.fromProject(project)
 
     internal fun closeProject(project: Project) {
@@ -137,20 +149,6 @@ class KotlinLspProxy {
         lspProjects.clear()
     }
 
-    private suspend fun startOrRetryClient() {
-        var attempt = 0
-        while(attempt < MAX_RECONNECT_ATTEMPTS)  {
-            try {
-                initializeClient(LSP_USERS_PROJECTS_ROOT.path, "kotlin-complier-server")
-                initializedDeferred.complete(Unit)
-                return
-            } catch (_: Exception) {
-                delay(LspConnectionManager.exponentialBackoffMillis(attempt = attempt++, base = 1000.0).milliseconds)
-            }
-        }
-        initializedDeferred.completeExceptionally(LspUnavailableException())
-    }
-
     private fun wireAvailabilityObservers(client: LspClient) {
         (client as? RetriableLspClient)?.let { lspClient ->
             lspClient.addOnDisconnectListener { available.set(false) }
@@ -163,8 +161,6 @@ class KotlinLspProxy {
         val LSP_PORT = System.getenv("LSP_PORT")?.toInt() ?: 9999
         val LSP_USERS_PROJECTS_ROOT: URI =
             Path.of(System.getenv("LSP_USERS_PROJECTS_ROOT") ?: ("lsp-users-projects-root")).toUri()
-
-        const val MAX_RECONNECT_ATTEMPTS = 5
     }
 }
 
