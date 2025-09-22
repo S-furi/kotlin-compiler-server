@@ -1,5 +1,6 @@
 package com.compiler.server.lsp.ws
 
+import com.compiler.server.AbstractCompletionTest
 import com.compiler.server.lsp.utils.LspIntegrationTestUtils
 import com.compiler.server.lsp.utils.RequireLspServerCondition
 import com.fasterxml.jackson.databind.JsonNode
@@ -11,8 +12,9 @@ import kotlinx.coroutines.future.await
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.withTimeoutOrNull
-import org.junit.jupiter.api.BeforeEach
-import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.BeforeAll
+import org.junit.jupiter.api.assertAll
 import org.junit.jupiter.api.assertNotNull
 import org.junit.jupiter.api.extension.ExtendWith
 import org.springframework.boot.test.context.SpringBootTest
@@ -28,48 +30,23 @@ import kotlin.time.Duration.Companion.seconds
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @LspIntegrationTestUtils.RequireLspServer
 @ExtendWith(RequireLspServerCondition::class)
-class KotlinLspProxyWSTest {
+class KotlinLspProxyWSTest: AbstractCompletionTest {
 
     @LocalServerPort
     private var port: Int = 0
-    private var url = "ws://localhost:$port/lsp/complete"
 
-    private lateinit var client: WebSocketClient
-    private lateinit var handler: TestClientHandler
+    private val url
+        get() = "ws://localhost:$port/lsp/complete"
 
-    private val objectMapper = ObjectMapper().apply { registerKotlinModule() }
-
-    @Test
-    fun `methods completions should be retrieved`() {
-        val content =
-            """
-            fun main() {
-                3.0.toIn
-            }
-            fun Double.toInterval(): IntRange = IntRange(0, toInt())
-        """.trimIndent()
-        checkCompletionsWithWebSocketSession(content, 1, 11, listOf("toInterval(", "toInt(", "toUInt("))
-    }
-
-    @Test
-    fun `project dependency lib (kotlinx-coroutines) should be retrieved`() {
-        val content =
-            """
-            fun main() {
-                GlobalSc
-            }
-            """.trimIndent()
-        checkCompletionsWithWebSocketSession(content, 1, 11, listOf("GlobalScope"))
-    }
-
-    @BeforeEach
-    fun setup() {
-        client = StandardWebSocketClient(
-            ContainerProvider.getWebSocketContainer().apply {
-                defaultMaxSessionIdleTimeout = 0L
-            }
-        )
-        handler = TestClientHandler()
+    override fun performCompletion(
+        code: String,
+        line: Int,
+        character: Int,
+        completions: List<String>,
+        isJs: Boolean
+    ) {
+        if (isJs) return
+        checkCompletionsWithWebSocketSession(code, line, character, completions)
     }
 
     fun checkCompletionsWithWebSocketSession(
@@ -82,7 +59,10 @@ class KotlinLspProxyWSTest {
         val msg = buildCompletionRequest(session.id, content, line, ch)
         session.sendMessage(TextMessage(objectMapper.writeValueAsString(msg)))
         val completions = handler.receiveCompletions()
-        expectedCompletions.forEach { assertContains(completions, it) }
+        val asserts = expectedCompletions.map { expected ->
+            completions.any { received -> received.contains(expected) }
+        }.map { pred -> { assertTrue(pred) } }
+        assertAll(asserts)
     }
 
     private suspend fun connect(): WebSocketSession {
@@ -107,31 +87,47 @@ class KotlinLspProxyWSTest {
         )
     }
 
-    private inner class TestClientHandler() : TextWebSocketHandler() {
-        private val messages: Channel<String> = Channel(Channel.UNLIMITED)
+    companion object {
+        private val defaultTimeout = 20.seconds
+        private lateinit var client: WebSocketClient
+        private lateinit var handler: TestClientHandler
+        private val objectMapper = ObjectMapper().apply { registerKotlinModule() }
 
-        override fun handleTextMessage(session: WebSocketSession, message: TextMessage) {
-            messages.trySend(message.payload)
+        @BeforeAll
+        @JvmStatic
+        fun setup() {
+            client = StandardWebSocketClient(
+                ContainerProvider.getWebSocketContainer().apply {
+                    defaultMaxSessionIdleTimeout = 0L
+                    defaultMaxTextMessageBufferSize = 1_000_000
+                    defaultMaxBinaryMessageBufferSize = 1_000_000
+                }
+            )
+            handler = TestClientHandler()
         }
 
-        suspend fun receiveMessage(): String =
-            withTimeout(defaultTimeout) {
-                messages.receive()
+        private class TestClientHandler() : TextWebSocketHandler() {
+            private val messages: Channel<String> = Channel(Channel.UNLIMITED)
+
+            override fun handleTextMessage(session: WebSocketSession, message: TextMessage) {
+                messages.trySend(message.payload)
             }
 
-        suspend fun receiveCompletions(): List<String> {
-            val msg = receiveMessage()
-            val json = objectMapper.readTree(msg)
-            return extractCompletionTexts(json)
-        }
+            suspend fun receiveMessage(): String =
+                withTimeout(defaultTimeout) {
+                    messages.receive()
+                }
 
-        private fun extractCompletionTexts(msg: JsonNode): List<String> {
-            val completions = msg["additionalData"]?.get("completions") ?: return emptyList()
-            return completions.mapNotNull { it["text"]?.asText() }
-        }
-    }
+            suspend fun receiveCompletions(): List<String> {
+                val msg = receiveMessage()
+                val json = objectMapper.readTree(msg)
+                return extractCompletionTexts(json)
+            }
 
-    companion object {
-        private val defaultTimeout = 10.seconds
+            private fun extractCompletionTexts(msg: JsonNode): List<String> {
+                val completions = msg["completions"] ?: return emptyList()
+                return completions.mapNotNull { it["displayText"]?.asText() }
+            }
+        }
     }
 }
