@@ -19,7 +19,7 @@ object LspCompletionParser {
 
         return Completion(
             text = completionTextFromFullName(label + functionParams.orEmpty()),
-            displayText = label + labelDetails.detail,
+            displayText = label + (labelDetails.detail ?: ""),
             tail = labelDetails.description,
             import = import,
             icon = parseIcon(kind?.name)
