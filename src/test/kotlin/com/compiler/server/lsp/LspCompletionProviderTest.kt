@@ -1,7 +1,9 @@
 package com.compiler.server.lsp
 
+import com.compiler.server.lsp.utils.CARET_MARKER
 import com.compiler.server.lsp.utils.LspIntegrationTestUtils.RequireLspServer
 import com.compiler.server.lsp.utils.RequireLspServerCondition
+import com.compiler.server.lsp.utils.extractCaret
 import com.compiler.server.model.Project
 import com.compiler.server.model.ProjectFile
 import model.Completion
@@ -31,16 +33,14 @@ class LspCompletionProviderTest {
 
     val testCode = """
         fun main() {
-            3.0.toIn
+            3.0.toIn$CARET_MARKER
         }
         fun Double.toIntervalZeroBased(): IntRange = IntRange(0, this.toInt())
     """.trimIndent()
 
-    val testProject = Project(files = listOf(ProjectFile(text = testCode, name = "file.kt")))
-
     @Test
     fun `rest endpoint should return simple completions`() {
-        val completions = getCompletions(testProject, 1, 11)
+        val completions = getCompletions(testCode)
         val toUint = completions.find { it.text == "toUInt()" }
             ?: error("Expected to find \"toUInt()\" completion, but got $completions\"")
 
@@ -57,7 +57,7 @@ class LspCompletionProviderTest {
 
     @Test
     fun `rest endpoint should return completions in the expected order`() {
-        val completions = getCompletions(testProject, 1, 11).map { it.text }
+        val completions = getCompletions(testCode).map { it.text }
         val expectedTexts = listOf("toInt()", "toIntervalZeroBased()", "toUInt()", "roundToInt()")
         assertEquals(expectedTexts, completions)
     }
@@ -67,16 +67,11 @@ class LspCompletionProviderTest {
         val code = """
             import java.util.Random
             fun main() {
-                val rnd = Random
+                val rnd = Random$CARET_MARKER
             }
         """.trimIndent()
 
-        val line = 2
-        val ch = 20
-
-        val project = Project(files = listOf(ProjectFile(text = code, name = "random.kt")))
-
-        val completions = getCompletions(project, line, ch)
+        val completions = getCompletions(code)
         val ktRandom = completions.find { it.displayText == "Random (kotlin.random)" && it.hasOtherImports == true }
             ?: error("Expected to find \"kotlin.random.Random\" completion, but got $completions\"")
 
@@ -86,8 +81,11 @@ class LspCompletionProviderTest {
         )
     }
 
-    private fun getCompletions(project: Project, line: Int, ch: Int): List<Completion> {
-        val url = "http://localhost:$port/api/compiler/lsp/complete?line=$line&ch=$ch"
+    private fun getCompletions(text: String): List<Completion> {
+        val (code, position) = extractCaret(text)
+        val project = Project(files = listOf(ProjectFile(text = code, name = "file.kt")))
+
+        val url = "http://localhost:$port/api/compiler/lsp/complete?line=${position.line}&ch=${position.character}"
         return withTimeout {
             post()
                 .uri(url)
