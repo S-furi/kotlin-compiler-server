@@ -154,13 +154,6 @@ tasks.named<Copy>("processResources") {
     }
 }
 
-if (hasProperty("buildScan")) {
-    extensions.findByName("buildScan")?.withGroovyBuilder {
-        setProperty("termsOfServiceUrl", "https://gradle.com/terms-of-service")
-        setProperty("termsOfServiceAgree", "no")
-    }
-}
-
 tasks.withType<Test> {
     with(rootProject.kotlinNodeJsEnvSpec) {
         dependsOn(rootProject.nodeJsSetupTaskProvider)
@@ -175,6 +168,7 @@ tasks.withType<Test> {
         this@withType.environment("kotlin.wasm.node.path", executablePath)
     }
 }
+
 val compileKotlin: KotlinCompile by tasks
 compileKotlin.compilerOptions {
     freeCompilerArgs.set(listOf("-Xcontext-parameters"))
