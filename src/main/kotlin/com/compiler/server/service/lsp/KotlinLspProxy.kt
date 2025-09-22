@@ -6,6 +6,7 @@ import com.compiler.server.model.ProjectFile
 import com.compiler.server.service.lsp.client.LspClient
 import com.compiler.server.service.lsp.client.LspConnectionManager
 import com.compiler.server.service.lsp.client.RetriableLspClient
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -28,6 +29,7 @@ class KotlinLspProxy {
     internal val lspProjects = ConcurrentHashMap<Project, LspProject>()
 
     private val available = AtomicBoolean(false)
+    private val initializedDeferred = CompletableDeferred<Unit>()
 
     @EventListener(ApplicationReadyEvent::class)
     fun initClientOnReady() {
@@ -38,7 +40,14 @@ class KotlinLspProxy {
 
     fun isAvailable(): Boolean = available.get()
 
-    fun requireAvailable() {
+    suspend fun requireAvailable() {
+        if (!isAvailable() && !initializedDeferred.isCompleted) {
+            try {
+                initializedDeferred.await()
+            } catch (_: Exception) {
+                throw LspUnavailableException()
+            }
+        }
         if (!isAvailable()) throw LspUnavailableException()
     }
 
@@ -62,6 +71,7 @@ class KotlinLspProxy {
             client = LspClient.createSingle(workspacePath, clientName)
             wireAvailabilityObservers(client)
             available.set(true)
+            initializedDeferred.complete(Unit)
         }
     }
 
@@ -78,7 +88,7 @@ class KotlinLspProxy {
      * @return a list of [CompletionItem]s
      */
     suspend fun getOneTimeCompletions(project: Project, line: Int, ch: Int): List<CompletionItem> {
-        if (!isAvailable()) return emptyList()
+        runCatching { requireAvailable() }.onFailure { return emptyList() }
         val lspProject = lspProjects.getOrPut(project) { createNewProject(project) }
         val projectFile = project.files.first() // we assume projects can have just a single file
         val uri = lspProject.getDocumentUri(projectFile.name) ?: return emptyList()
@@ -132,11 +142,13 @@ class KotlinLspProxy {
         while(attempt < MAX_RECONNECT_ATTEMPTS)  {
             try {
                 initializeClient(LSP_USERS_PROJECTS_ROOT.path, "kotlin-complier-server")
+                initializedDeferred.complete(Unit)
                 return
             } catch (_: Exception) {
                 delay(LspConnectionManager.exponentialBackoffMillis(attempt = attempt++, base = 1000.0).milliseconds)
             }
         }
+        initializedDeferred.completeExceptionally(LspUnavailableException())
     }
 
     private fun wireAvailabilityObservers(client: LspClient) {
