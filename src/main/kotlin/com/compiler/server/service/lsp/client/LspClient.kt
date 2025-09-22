@@ -65,8 +65,13 @@ interface LspClient : AutoCloseable {
          * @param kotlinProjectRoot the path to the workspace directory, namely the root of the common project
          * @param projectName the name of the project
          */
-        suspend fun createSingle(kotlinProjectRoot: String, projectName: String = "None"): KotlinLspClient {
-            return KotlinLspClient().apply {
+        suspend fun createSingle(
+            kotlinProjectRoot: String,
+            projectName: String = "None",
+            host: String = LspConnectionManager.LSP_HOST,
+            port: Int = LspConnectionManager.LSP_PORT,
+        ): KotlinLspClient {
+            return KotlinLspClient(host, port).apply {
                 initRequest(kotlinProjectRoot, projectName).await()
             }
         }
