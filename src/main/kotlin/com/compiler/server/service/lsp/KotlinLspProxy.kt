@@ -12,7 +12,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import org.eclipse.lsp4j.CompletionItem
 import org.eclipse.lsp4j.Position
-import org.jetbrains.kotlin.ir.util.toIrConst
 import org.springframework.boot.context.event.ApplicationReadyEvent
 import org.springframework.context.event.EventListener
 import org.springframework.stereotype.Component
@@ -101,7 +100,7 @@ class KotlinLspProxy {
      * @param clientName the name of the client, defaults to "lsp-proxy"
      */
     suspend fun initializeClient(
-        workspacePath: String = LSP_USERS_PROJECTS_ROOT.path,
+        workspacePath: String = LSP_REMOTE_WORKSPACE_ROOT.path,
         clientName: String = "kotlin-compiler-server"
     ) {
         if (!::client.isInitialized) {
@@ -117,15 +116,14 @@ class KotlinLspProxy {
     suspend fun requireAvailable() {
         if (!isAvailable()) {
             try {
+                if (!::client.isInitialized) initializeClient()
                 if (!lspClientInitializedDeferred.isCompleted) {
                     lspClientInitializedDeferred.await()
                 }
                 client.awaitReady()
                 available.set(true)
             } catch (e: Exception) {
-                println("Qualcosa è andato storto durante l'inizializzazione del client LSP + $e")
-                e.printStackTrace()
-                throw LspUnavailableException()
+                throw LspUnavailableException(e.message ?: "Lsp client is not available")
             }
         }
     }
@@ -157,8 +155,22 @@ class KotlinLspProxy {
     }
 
     companion object {
-        val LSP_USERS_PROJECTS_ROOT: URI =
-            Path.of(System.getenv("LSP_USERS_PROJECTS_ROOT") ?: ("lsp-users-projects-root")).toUri()
+        val LSP_REMOTE_WORKSPACE_ROOT: URI = Path.of(
+            System.getProperty("LSP_REMOTE_WORKSPACE_ROOT")
+                ?: System.getenv("LSP_REMOTE_WORKSPACE_ROOT")
+                ?: defaultWorkspacePath()
+        ).toUri()
+
+        val LSP_LOCAL_WORKSPACE_ROOT: URI = Path.of(
+            System.getProperty("LSP_LOCAL_WORKSPACE_ROOT")
+                ?: System.getenv("LSP_LOCAL_WORKSPACE_ROOT")
+                ?: defaultWorkspacePath()
+        ).toUri()
+
+        private fun defaultWorkspacePath(): String =
+            System.getProperty("LSP_USERS_PROJECTS_ROOT")
+                ?: System.getProperty("LSP_USERS_PROJECTS_ROOT")
+                ?: ("lsp-users-projects-root")
     }
 }
 
