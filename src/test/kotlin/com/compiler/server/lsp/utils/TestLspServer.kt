@@ -94,7 +94,7 @@ class TestLspServer(port: Int = 0): AutoCloseable {
     }
 
     companion object {
-        suspend fun withTestLspServer(port: Int = 0, body: TestLspServer.() -> Unit) {
+        fun withTestLspServer(port: Int = 0, body: TestLspServer.() -> Unit) {
             TestLspServer(port).use { server ->
                 server.startAccepting()
                 body(server)

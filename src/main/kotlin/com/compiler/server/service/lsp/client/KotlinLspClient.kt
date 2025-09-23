@@ -187,9 +187,9 @@ class KotlinLspClient(
         workspace = WorkspaceClientCapabilities().apply { workspaceFolders = true }
     }
 
-    override fun close() = runBlocking {
-        shutdown().await()
-        exit()
+    override fun close() {
+        super.close()
+        connectionManager.close()
     }
 
     override suspend fun awaitReady() {
