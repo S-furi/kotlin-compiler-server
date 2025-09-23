@@ -68,8 +68,8 @@ interface LspClient : AutoCloseable {
         suspend fun createSingle(
             kotlinProjectRoot: String,
             projectName: String = "None",
-            host: String = LspConnectionManager.LSP_HOST,
-            port: Int = LspConnectionManager.LSP_PORT,
+            host: String = LspConnectionManager.lspHost,
+            port: Int = LspConnectionManager.lspPort,
         ): KotlinLspClient {
             return KotlinLspClient(host, port).apply {
                 initRequest(kotlinProjectRoot, projectName).await()

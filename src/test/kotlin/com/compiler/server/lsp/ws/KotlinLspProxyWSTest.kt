@@ -1,8 +1,7 @@
 package com.compiler.server.lsp.ws
 
 import com.compiler.server.AbstractCompletionTest
-import com.compiler.server.lsp.utils.LspIntegrationTestUtils
-import com.compiler.server.lsp.utils.RequireLspServerCondition
+import com.compiler.server.lsp.utils.KotlinLspComposeExtension
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.registerKotlinModule
@@ -24,12 +23,10 @@ import org.springframework.web.socket.WebSocketSession
 import org.springframework.web.socket.client.WebSocketClient
 import org.springframework.web.socket.client.standard.StandardWebSocketClient
 import org.springframework.web.socket.handler.TextWebSocketHandler
-import kotlin.test.assertContains
 import kotlin.time.Duration.Companion.seconds
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@LspIntegrationTestUtils.RequireLspServer
-@ExtendWith(RequireLspServerCondition::class)
+@ExtendWith(KotlinLspComposeExtension::class)
 class KotlinLspProxyWSTest: AbstractCompletionTest {
 
     @LocalServerPort

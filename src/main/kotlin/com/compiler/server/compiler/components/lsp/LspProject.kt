@@ -40,7 +40,7 @@ class LspProject(
     }
 
     companion object {
-        private val baseDir = Path.of(KotlinLspProxy.LSP_USERS_PROJECTS_ROOT).toAbsolutePath()
+        private val baseDir = Path.of(KotlinLspProxy.LSP_LOCAL_WORKSPACE_ROOT).toAbsolutePath()
 
         fun fromProject(project: Project, ownerId: String? = null): LspProject {
             return LspProject(

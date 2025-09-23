@@ -20,8 +20,8 @@ import kotlin.random.Random
 
 
 internal class LspConnectionManager(
-    private val host: String = LSP_HOST,
-    private val port: Int = LSP_PORT,
+    private val host: String = lspHost,
+    private val port: Int = lspPort,
     private val languageClient: LanguageClient = KotlinLanguageClient(),
     private val maxConnectionRetries: Int = 5,
 ): AutoCloseable {
@@ -42,7 +42,7 @@ internal class LspConnectionManager(
     private val reconnectListeners = mutableListOf<() -> Unit>()
 
     @Synchronized
-    fun ensureConnected(initial: Boolean = true): LanguageServer {
+    fun ensureConnected(initial: Boolean = false): LanguageServer {
         if (isClosing.get()) error("Connection manager is closing or already closed")
         serverProxy?.let { return it }
         connect(initial)
@@ -69,7 +69,7 @@ internal class LspConnectionManager(
                 socket = s
                 serverProxy = launcher.remoteProxy
                 if (!initial) notifyReconnected()
-                logger.info("Connected to LSP server")
+                logger.info("Connected to LSP server at {}:{}", host, port)
                 return
             } catch (e: Exception) {
                 if (e is ConnectException || e.cause is ConnectException) {
@@ -147,8 +147,18 @@ internal class LspConnectionManager(
     }
 
     companion object {
-        val LSP_HOST = System.getenv("LSP_HOST") ?: "127.0.0.1"
-        val LSP_PORT = System.getenv("LSP_PORT")?.toInt() ?: 9999
+        private const val LSP_DEFAULT_HOST = "127.0.0.1"
+        private const val LSP_DEFAULT_PORT = 9999
+
+        val lspHost: String =
+            System.getProperty("LSP_HOST")
+                ?: System.getenv("LSP_HOST")
+                ?: LSP_DEFAULT_HOST
+
+        val lspPort: Int =
+            System.getProperty("LSP_PORT")?.toInt()
+                ?: System.getenv("LSP_PORT")?.toInt()
+                ?: LSP_DEFAULT_PORT
 
         /**
          * Basic exponential backoff starting from [base]ms with jitter (+/-[jitterFactor]%), up to [maxVal]ms

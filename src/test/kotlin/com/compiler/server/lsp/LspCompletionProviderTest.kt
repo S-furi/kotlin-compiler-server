@@ -1,8 +1,7 @@
 package com.compiler.server.lsp
 
 import com.compiler.server.lsp.utils.CARET_MARKER
-import com.compiler.server.lsp.utils.LspIntegrationTestUtils.RequireLspServer
-import com.compiler.server.lsp.utils.RequireLspServerCondition
+import com.compiler.server.lsp.utils.KotlinLspComposeExtension
 import com.compiler.server.lsp.utils.extractCaret
 import com.compiler.server.model.Project
 import com.compiler.server.model.ProjectFile
@@ -12,7 +11,6 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertAll
 import org.junit.jupiter.api.assertNull
 import org.junit.jupiter.api.extension.ExtendWith
-import org.junit.platform.commons.logging.LoggerFactory
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.test.web.server.LocalServerPort
@@ -21,8 +19,7 @@ import java.time.Duration
 import kotlin.test.assertEquals
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@RequireLspServer
-@ExtendWith(RequireLspServerCondition::class)
+@ExtendWith(KotlinLspComposeExtension::class)
 class LspCompletionProviderTest {
 
     @LocalServerPort
@@ -51,7 +48,7 @@ class LspCompletionProviderTest {
             import = "kotlin.toUInt",
             icon = Icon.METHOD,
             hasOtherImports = null
-       )
+        )
         assertEquals(expected, toUint)
     }
 
@@ -76,7 +73,7 @@ class LspCompletionProviderTest {
             ?: error("Expected to find \"kotlin.random.Random\" completion, but got $completions\"")
 
         assertAll(
-            { assertEquals("kotlin.random.Random", ktRandom.text) } ,
+            { assertEquals("kotlin.random.Random", ktRandom.text) },
             { assertNull(ktRandom.import) },
         )
     }
@@ -99,11 +96,7 @@ class LspCompletionProviderTest {
     }
 
     private fun <T> withTimeout(
-        duration: Duration = Duration.ofSeconds(20),
+        duration: Duration = Duration.ofMinutes(1),
         body: WebTestClient.() -> T?
     ): T? = with(webTestClient.mutate().responseTimeout(duration).build()) { body() }
-
-    companion object {
-        private val logger = LoggerFactory.getLogger(LspCompletionProviderTest::class.java)
-    }
 }
