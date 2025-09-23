@@ -50,17 +50,8 @@ class LspProject(
             )
         }
 
-        fun fromFile(fileName: String, fileContents: String, projectType: ProjectType, ownerId: String? = null): LspProject {
-            val projectFile = LspDocument(fileContents, fileName, publicId = null)
-            return LspProject(
-                files = listOf(projectFile),
-                confType = ensureSupportedConfType(projectType),
-                ownerId = ownerId,
-            )
-        }
-
         /**
-         * If and when kotlin LSP would support other project types, this function can be updated.
+         * If and when kotlin LSP support other project types, this function can be updated.
          */
         private fun ensureSupportedConfType(projectType: ProjectType): ProjectType {
             require(projectType.isJvmRelated()) { "Only JVM related projects are supported" }
@@ -75,6 +66,7 @@ data class LspDocument(
     val publicId: String? = null,
 )
 
+@Suppress("unused")
 enum class LspProjectType(@JsonValue val id: String) {
     JAVA("java"),
     // add here support for JS, WASM, ...

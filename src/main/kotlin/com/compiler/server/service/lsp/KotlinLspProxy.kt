@@ -64,8 +64,8 @@ class KotlinLspProxy {
     /**
      * Retrieve completions for a given line and character position in a project file. By now
      *
-     * - we assume that the project contains a single file
-     * - changes arrive **before** completion is triggered
+     * - We assume that the project contains a single file;
+     * - Changes arrive **before** completion is triggered.
      *
      * Changes are not incremental, whole file content is transmitted. Future support
      * for incremental changes may be added when [Kotlin-LSP](https://github.com/Kotlin/kotlin-lsp)
