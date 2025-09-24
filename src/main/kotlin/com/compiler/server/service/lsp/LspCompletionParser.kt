@@ -15,7 +15,7 @@ object LspCompletionParser {
     fun CompletionItem.toCompletion(): Completion? {
         val (functionParams, importPrefix) = extractParamsAndImportFromLabelDetails(labelDetails)
         if (importPrefix != null && isInternalImport(importPrefix)) return null
-        val import = importPrefix?.let { "$it.$label"}
+        val import = if (hasToBeImported()) importPrefix?.let { "$it.$label"} else null
 
         return Completion(
             text = completionTextFromFullName(label + functionParams.orEmpty()),
@@ -72,6 +72,33 @@ object LspCompletionParser {
                 else -> null
             }
         }
+    }
+
+    private fun CompletionItem.hasToBeImported(): Boolean {
+        val objectMapper = Json { ignoreUnknownKeys = true }
+
+        val lookupObject = objectMapper.parseToJsonElement(data.toString())
+            .jsonObject["additionalData"]
+            ?.jsonObject?.get("model")
+            ?.jsonObject?.get("delegate")
+            ?.jsonObject?.get("delegate")
+            ?.jsonObject?.get("lookupObject")
+            ?.jsonObject?.get("lookupObject")
+
+        val importingStrategy =
+            if (lookupObject?.jsonObject?.get("options") != null) {
+                lookupObject.jsonObject["options"]
+            } else lookupObject
+
+        lookupObject?.jsonObject?.get("kind")?.let {
+            if (it.jsonPrimitive.content.contains("PackagePart")) return false
+        }
+
+        return importingStrategy
+            ?.jsonObject?.get("importingStrategy")
+            ?.jsonObject?.get("kind")
+            ?.jsonPrimitive?.content?.contains("DoNothing")?.not()
+            ?: true
     }
 
     private fun isInternalImport(import: String): Boolean =
