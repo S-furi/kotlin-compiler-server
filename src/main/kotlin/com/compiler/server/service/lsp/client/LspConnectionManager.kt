@@ -7,6 +7,8 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
 import org.eclipse.lsp4j.launch.LSPLauncher
 import org.eclipse.lsp4j.services.LanguageClient
 import org.eclipse.lsp4j.services.LanguageServer
@@ -49,43 +51,51 @@ internal class LspConnectionManager(
     fun ensureConnected(initial: Boolean = false): LanguageServer {
         if (isClosing.get()) error("Connection manager is closing or already closed")
         serverProxy?.let { return it }
-        connect(initial)
+        runBlocking { connectWithRetry(initial) }
         return serverProxy ?: error("Could not connect to LSP server")
     }
 
-    private fun connect(initial: Boolean = false) {
+    private suspend fun connectWithRetry(initial: Boolean = false) {
         var attempt = 0
+        var lastError: Exception? = null
         while (attempt < maxConnectionRetries && !isClosing.get()) {
             try {
-                val s = Socket(host, port).apply {
-                    tcpNoDelay = true
-                    keepAlive = true
-                    soTimeout = 0
-                    setPerformancePreferences(0, 2, 1)
-                }
-                val input = BufferedInputStream(s.getInputStream())
-                val output = BufferedOutputStream(s.getOutputStream())
-                val launcher = LSPLauncher.createClientLauncher(languageClient, input, output)
-                launcher.startListening().also {
-                    listenFuture = it
-                    watchConnection(it)
-                }
-                socket = s
-                serverProxy = launcher.remoteProxy
-                if (!initial) notifyReconnected()
-                logger.info("Connected to LSP server at {}:{}", host, port)
+                connectOnce(initial)
                 return
             } catch (e: Exception) {
+                lastError = e
                 if (e is ConnectException || e.cause is ConnectException) {
                     logger.info("Could not connect to LSP server: ${e.message}")
                 } else {
                     logger.warn("Unexpected error while connecting to LSP server:", e)
                 }
-                Thread.sleep(exponentialBackoffMillis(attempt++).toLong())
                 logger.info("Trying reconnect, attempt {} of {}", attempt, maxConnectionRetries)
+                delay(exponentialBackoffMillis(attempt++).milliseconds)
             }
         }
-        throw ConnectException("Could not connect to LSP server after $maxConnectionRetries attempts")
+        throw ConnectException("Could not connect to LSP server after $maxConnectionRetries attempts").apply {
+            if (lastError != null) initCause(lastError)
+        }
+    }
+
+    private suspend fun connectOnce(initial: Boolean = false) = withContext(Dispatchers.IO) {
+        val s = Socket(host, port).apply {
+            tcpNoDelay = true
+            keepAlive = true
+            soTimeout = 0
+            setPerformancePreferences(0, 2, 1)
+        }
+        val input = BufferedInputStream(s.getInputStream())
+        val output = BufferedOutputStream(s.getOutputStream())
+        val launcher = LSPLauncher.createClientLauncher(languageClient, input, output)
+        launcher.startListening().also {
+            listenFuture = it
+            watchConnection(it)
+        }
+        socket = s
+        serverProxy = launcher.remoteProxy
+        if (!initial) notifyReconnected()
+        logger.info("Connected to LSP server at {}:{}", host, port)
     }
 
     private fun watchConnection(future: Future<Void>) {
@@ -117,8 +127,8 @@ internal class LspConnectionManager(
             try {
                 while (!isClosing.get() && attempt < maxConnectionRetries) {
                     try {
-                        if (attempt > 0) delay(exponentialBackoffMillis(attempt).milliseconds)
-                        connect()
+                        if (attempt > 0) delay(exponentialBackoffMillis(attempt).toLong())
+                        connectWithRetry()
                         return@launch
                     } catch (t: Throwable) {
                         logger.info("Reconnect attempt {} failed: {}", ++attempt, t.message)
