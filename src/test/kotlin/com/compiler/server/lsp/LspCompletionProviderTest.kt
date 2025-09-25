@@ -79,7 +79,7 @@ class LspCompletionProviderTest {
     }
 
     private fun getCompletions(text: String): List<Completion> {
-        val (code, position) = extractCaret(text)
+        val (code, position) = extractCaret { text }
         val project = Project(files = listOf(ProjectFile(text = code, name = "file.kt")))
 
         val url = "http://localhost:$port/api/compiler/lsp/complete?line=${position.line}&ch=${position.character}"

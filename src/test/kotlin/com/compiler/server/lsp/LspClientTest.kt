@@ -29,8 +29,14 @@ class LspClientTest {
 
     @Test
     fun `LSP client should provide completions for local variables`() = runBlocking {
-        val text = "fun main() {\n    val alex = 1\n    val alex1 = 1 + a$CARET_MARKER\n}"
-        val (code, position) = extractCaret(text)
+        val (code, position) = extractCaret {
+            """
+                fun main() {
+                    val alex = 1
+                    val alex1 = 1 + a$CARET_MARKER
+                }
+            """.trimIndent()
+        }
 
         client.openDocument(FAKE_RESOURCE_URI, code)
         delay(1.seconds)
@@ -44,8 +50,13 @@ class LspClientTest {
 
     @Test
     fun `LSP client should provide completions for stdlib elements`() = runBlocking {
-        val text = "fun main() {\n    3.0.toIn$CARET_MARKER\n}"
-        val (code, position) = extractCaret(text)
+        val (code, position) = extractCaret {
+            """
+                fun main() {
+                    3.0.toIn$CARET_MARKER
+                }
+            """.trimIndent()
+        }
         client.openDocument(FAKE_RESOURCE_URI, code)
         delay(1.seconds)
         val completions = client.getCompletion(FAKE_RESOURCE_URI, position).await()
@@ -57,8 +68,13 @@ class LspClientTest {
 
     @Test
     fun `LSP client should provide completions for libs declared in build file (kotlinx-coroutines)`() = runBlocking {
-        val text = "fun main() {\n    runBlock$CARET_MARKER\n}"
-        val (code, position) = extractCaret(text)
+        val (code, position) = extractCaret {
+            """
+                fun main() {
+                    runBlock$CARET_MARKER
+                }
+            """.trimIndent()
+        }
         client.openDocument(FAKE_RESOURCE_URI, code)
         delay(1.seconds)
         val completions = client.getCompletion(FAKE_RESOURCE_URI, position).await()
