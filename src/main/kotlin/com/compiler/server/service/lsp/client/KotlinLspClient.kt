@@ -244,6 +244,9 @@ private data class ReadyState(
 
     @Synchronized
     fun reset(): CompletableDeferred<Unit> {
+        if (!ready.get().isCompleted) {
+            ready.get().completeExceptionally(IllegalStateException("State reset due to lost connection with LSP"))
+        }
         ready.set(CompletableDeferred())
         return ready.get()
     }
