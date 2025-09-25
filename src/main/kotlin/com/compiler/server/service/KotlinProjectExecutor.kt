@@ -2,7 +2,7 @@ package com.compiler.server.service
 
 import com.compiler.server.compiler.KotlinFile
 import com.compiler.server.compiler.components.*
-import com.compiler.server.compiler.components.lsp.LspCompletionProvider
+import com.compiler.server.service.lsp.components.LspCompletionProvider
 import com.compiler.server.model.*
 import com.compiler.server.model.bean.VersionInfo
 import component.KotlinEnvironment

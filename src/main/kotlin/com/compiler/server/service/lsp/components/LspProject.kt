@@ -1,4 +1,4 @@
-package com.compiler.server.compiler.components.lsp
+package com.compiler.server.service.lsp.components
 
 import com.compiler.server.model.Project
 import com.compiler.server.model.ProjectType
