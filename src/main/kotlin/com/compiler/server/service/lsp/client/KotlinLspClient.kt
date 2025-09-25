@@ -15,6 +15,7 @@ import java.io.EOFException
 import java.net.SocketException
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CompletionException
+import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.atomic.AtomicReference
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
@@ -30,8 +31,8 @@ class KotlinLspClient(
     private val logger = LoggerFactory.getLogger(this::class.java)
     private val connectionManager = LspConnectionManager(host, port)
 
-    private val disconnectListeners = mutableListOf<() -> Unit>()
-    private val reconnectListeners = mutableListOf<() -> Unit>()
+    private val disconnectListeners = CopyOnWriteArrayList<() -> Unit>()
+    private val reconnectListeners = CopyOnWriteArrayList<() -> Unit>()
 
     private val languageServer: LanguageServer
         get() = connectionManager.ensureConnected()
