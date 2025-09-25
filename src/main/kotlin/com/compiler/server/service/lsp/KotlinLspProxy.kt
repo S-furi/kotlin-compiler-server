@@ -12,6 +12,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import org.eclipse.lsp4j.CompletionItem
 import org.eclipse.lsp4j.Position
+import org.slf4j.LoggerFactory
 import org.springframework.boot.context.event.ApplicationReadyEvent
 import org.springframework.context.event.EventListener
 import org.springframework.stereotype.Component
@@ -131,9 +132,10 @@ class KotlinLspProxy {
     }
 
     internal suspend fun ensureLspClientReady(): Boolean? =
-        runCatching { requireAvailable() ; true}.onFailure {
+        runCatching { requireAvailable() }.onFailure {
             if (it is LspUnavailableException) throw it
-        }.getOrDefault(false)
+            else logger.debug("Lsp client not ready: ${it.message}")
+        }.isSuccess.takeIf { it }
 
     private fun createNewProject(project: Project): LspProject = LspProject.fromProject(project)
 
@@ -180,6 +182,8 @@ class KotlinLspProxy {
      * from the LSP analyzer to resolve the project's dependencies.
      */
     companion object {
+        private val logger = LoggerFactory.getLogger(KotlinLspProxy::class.java)
+
         val LSP_REMOTE_WORKSPACE_ROOT: URI = Path.of(
             System.getProperty("LSP_REMOTE_WORKSPACE_ROOT")
                 ?: System.getenv("LSP_REMOTE_WORKSPACE_ROOT")
