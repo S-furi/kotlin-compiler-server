@@ -170,6 +170,15 @@ class KotlinLspProxy {
         }
     }
 
+    /**
+     * [LSP_REMOTE_WORKSPACE_ROOT] is the workspace that the LSP will point to, while
+     * [LSP_LOCAL_WORKSPACE_ROOT] is the local workspace that the LSP client is running on.
+     * They are usually the same if the LSP client is running on the same machine as the server,
+     * otherwise [LSP_REMOTE_WORKSPACE_ROOT] will have to be set wrt to server's local workspace.
+     *
+     * Note that [LSP_REMOTE_WORKSPACE_ROOT] is the most important one, since it will be used
+     * from the LSP analyzer to resolve the project's dependencies.
+     */
     companion object {
         val LSP_REMOTE_WORKSPACE_ROOT: URI = Path.of(
             System.getProperty("LSP_REMOTE_WORKSPACE_ROOT")
