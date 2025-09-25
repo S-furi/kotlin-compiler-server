@@ -4,8 +4,6 @@ import com.compiler.server.service.lsp.client.LspConnectionManager.Companion.exp
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.future.await
-import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeout
 import org.eclipse.lsp4j.*
@@ -13,11 +11,14 @@ import org.eclipse.lsp4j.jsonrpc.ResponseErrorException
 import org.eclipse.lsp4j.jsonrpc.messages.ResponseErrorCode
 import org.eclipse.lsp4j.services.LanguageServer
 import org.slf4j.LoggerFactory
+import java.io.EOFException
+import java.net.SocketException
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CompletionException
 import java.util.concurrent.atomic.AtomicReference
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
+import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
@@ -117,10 +118,13 @@ class KotlinLspClient(
         maxRetries: Int,
     ): List<CompletionItem> {
         var attempt = 0
-
+        runCatching { awaitReady(RECONNECT_TIMEOUT.seconds) }.onFailure {
+            logger.info("LSP not ready")
+            return emptyList()
+        }
         do {
             try {
-                return withTimeout(10.seconds) {
+                return withTimeout(COMPLETIONS_TIMEOUT.seconds) {
                     getCompletion(uri, position, triggerKind).awaitCancellable()
                 }
             } catch (e: Throwable) {
@@ -132,6 +136,14 @@ class KotlinLspClient(
                         if (e.message?.contains("Document with url FileUrl(url='$uri'") ?: false) {
                             logger.info("Failed to get completions (document not ready), retrying... (${attempt + 1}/$maxRetries)")
                             delay(exponentialBackoffMillis(attempt = attempt, base = 1000.0).milliseconds)
+                            attempt++
+                            continue
+                        }
+
+                        if (e.cause is SocketException || e.cause is EOFException) { // mid-flight fail
+                            logger.info("Completion failed due to connection issue, awaiting reconnection")
+                            runCatching { awaitReady(RECONNECT_TIMEOUT.seconds) }
+                                .onFailure { return emptyList() }
                             attempt++
                             continue
                         }
@@ -192,12 +204,15 @@ class KotlinLspClient(
         connectionManager.close()
     }
 
-    override suspend fun awaitReady() {
-        readyState.awaitReady()
+    override suspend fun awaitReady(timeout: Duration?) {
+        if (timeout == null) {
+            readyState.awaitReady()
+        } else {
+            withTimeout(timeout) { readyState.awaitReady() }
+        }
     }
 
     override fun isReady(): Boolean = readyState.isReady()
-
 
     override fun addOnDisconnectListener(listener: () -> Unit) {
         disconnectListeners += listener
@@ -215,6 +230,11 @@ class KotlinLspClient(
             }
             continuation.invokeOnCancellation { this.cancel(true) }
         }
+
+    companion object {
+        const val RECONNECT_TIMEOUT = 60
+        const val COMPLETIONS_TIMEOUT = 10
+    }
 }
 
 private data class ReadyState(
