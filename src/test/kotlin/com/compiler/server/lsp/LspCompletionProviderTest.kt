@@ -45,7 +45,6 @@ class LspCompletionProviderTest {
             text = "toUInt()",
             displayText = "toUInt() for Double in kotlin",
             tail = "UInt",
-            import = "kotlin.toUInt",
             icon = Icon.METHOD,
             hasOtherImports = null
         )

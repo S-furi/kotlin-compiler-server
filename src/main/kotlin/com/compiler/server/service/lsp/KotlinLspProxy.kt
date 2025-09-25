@@ -59,7 +59,7 @@ class KotlinLspProxy {
         val lspProject = lspProjects.getOrPut(project) { createNewProject(project) }
         val projectFile = project.files.first() // we assume projects can have just a single file
         val uri = lspProject.getDocumentUri(projectFile.name) ?: return emptyList()
-        client.openDocument(uri, projectFile.text)
+        client.openDocument(uri, projectFile.text, 1)
         return getCompletions(lspProject, line, ch, projectFile.name)
             .also { closeProject(project) }
     }
@@ -164,7 +164,8 @@ class KotlinLspProxy {
                 lspProjects.forEach { (project, lspProject) ->
                     val file = project.files.first()
                     val uri = lspProject.getDocumentUri(file.name) ?: return@forEach
-                    client.openDocument(uri, file.text)
+                    lspProject.resetDocumentVersion(file.name)
+                    client.openDocument(uri, file.text, 1)
                 }
                 lspClientInitializedDeferred.complete(Unit)
                 available.set(true)
@@ -233,7 +234,7 @@ object StatefulKotlinLspProxy {
     fun KotlinLspProxy.onClientConnected(clientId: String) {
         val project = Project(files = listOf(ProjectFile(name = "$clientId.kt"))).also { clientsProjects[clientId] = it }
         val lspProject = LspProject.fromProject(project).also { lspProjects[project] = it }
-        lspProject.getDocumentsUris().forEach { uri -> client.openDocument(uri, "") }
+        lspProject.getDocumentsUris().forEach { uri -> client.openDocument(uri, "", 1) }
     }
 
     fun KotlinLspProxy.onClientDisconnected(clientId: String) {
@@ -243,8 +244,16 @@ object StatefulKotlinLspProxy {
         }
     }
 
-    private fun KotlinLspProxy.changeDocumentContent(lspProject: LspProject, documentToChange: String, newContent: String) {
+    private fun KotlinLspProxy.changeDocumentContent(
+        lspProject: LspProject,
+        documentToChange: String,
+        newContent: String
+    ) {
         lspProject.changeDocumentContents(documentToChange, newContent)
-        client.changeDocument(lspProject.getDocumentUri(documentToChange)!!, newContent, lspProject.version)
+        client.changeDocument(
+            lspProject.getDocumentUri(documentToChange)!!,
+            newContent,
+            lspProject.getLatestDocumentVersion(documentToChange)
+        )
     }
 }

@@ -7,6 +7,8 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 import com.fasterxml.jackson.annotation.JsonValue
 import java.nio.file.Path
 import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicInteger
 
 @JsonIgnoreProperties(value = ["ownerId"])
 class LspProject(
@@ -16,8 +18,7 @@ class LspProject(
 ) {
     private val projectRoot: Path = baseDir.resolve("$confType-${ownerId ?: UUID.randomUUID().toString()}")
     private val documentsToPaths: MutableMap<String, Path> = mutableMapOf()
-    var version: Int = 0
-        private set
+    private val documentsVersions = ConcurrentHashMap<String, AtomicInteger>()
 
     init {
         projectRoot.toFile().mkdirs()
@@ -28,14 +29,23 @@ class LspProject(
         }
     }
 
+    @Synchronized
     fun changeDocumentContents(name: String, newContents: String) {
         documentsToPaths[name]?.toFile()?.writeText(newContents)
-        version++
+        documentsVersions[name]?.incrementAndGet()
     }
 
     fun getDocumentUri(name: String): String? = documentsToPaths[name]?.toUri()?.toString()
 
     fun getDocumentsUris(): List<String> = documentsToPaths.keys.mapNotNull { getDocumentUri(it) }
+
+    fun getLatestDocumentVersion(name: String): Int = documentsVersions.compute(name) { _, v ->
+        (v ?: AtomicInteger(1)).apply { addAndGet(1) }
+    }!!.get()
+
+    fun resetDocumentVersion(name: String) {
+        documentsVersions[name]?.set(1)
+    }
 
     fun tearDown() {
         documentsToPaths.values.forEach { it.toFile().delete() }
