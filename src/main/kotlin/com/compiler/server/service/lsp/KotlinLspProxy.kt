@@ -1,6 +1,6 @@
 package com.compiler.server.service.lsp
 
-import com.compiler.server.compiler.components.lsp.LspProject
+import com.compiler.server.service.lsp.components.LspProject
 import com.compiler.server.model.Project
 import com.compiler.server.model.ProjectFile
 import com.compiler.server.service.lsp.client.LspClient
