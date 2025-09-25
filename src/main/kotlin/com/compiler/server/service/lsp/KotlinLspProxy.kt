@@ -15,6 +15,7 @@ import org.eclipse.lsp4j.Position
 import org.springframework.boot.context.event.ApplicationReadyEvent
 import org.springframework.context.event.EventListener
 import org.springframework.stereotype.Component
+import java.io.IOException
 import java.net.URI
 import java.nio.file.Path
 import java.util.concurrent.ConcurrentHashMap
@@ -151,6 +152,9 @@ class KotlinLspProxy {
     fun wireAvailabilityObservers(client: LspClient) {
         (client as? RetriableLspClient)?.let { lspClient ->
             lspClient.addOnDisconnectListener {
+                if (!lspClientInitializedDeferred.isCompleted) {
+                    lspClientInitializedDeferred.completeExceptionally(IOException("Lsp client disconnected"))
+                }
                 lspClientInitializedDeferred = CompletableDeferred()
                 available.set(false)
             }
