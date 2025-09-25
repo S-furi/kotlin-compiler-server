@@ -136,7 +136,7 @@ class KotlinLspClient(
                         }
                         if (e.message?.contains("Document with url FileUrl(url='$uri'") ?: false) {
                             logger.info("Failed to get completions (document not ready), retrying... (${attempt + 1}/$maxRetries)")
-                            delay(exponentialBackoffMillis(attempt = attempt, base = 1000.0).milliseconds)
+                            delay(exponentialBackoffMillis(attempt = attempt).milliseconds)
                             attempt++
                             continue
                         }
