@@ -4,6 +4,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import org.eclipse.lsp4j.launch.LSPLauncher
 import org.eclipse.lsp4j.services.LanguageClient
@@ -77,7 +78,7 @@ internal class LspConnectionManager(
                 } else {
                     logger.warn("Unexpected error while connecting to LSP server:", e)
                 }
-                Thread.sleep(exponentialBackoffMillis(attempt++, base = 1000.0).toLong())
+                Thread.sleep(exponentialBackoffMillis(attempt++).toLong())
                 logger.info("Trying reconnect, attempt {} of {}", attempt, maxConnectionRetries)
             }
         }
@@ -144,6 +145,7 @@ internal class LspConnectionManager(
     override fun close() {
         isClosing.set(true)
         tearDown()
+        scope.cancel()
     }
 
     companion object {
@@ -171,7 +173,7 @@ internal class LspConnectionManager(
          */
         internal fun exponentialBackoffMillis(
             attempt: Int,
-            base: Double = 100.0,
+            base: Double = 1000.0,
             maxVal: Double = 5 * base,
             jitterFactor: Double = 0.3
         ): Double {
