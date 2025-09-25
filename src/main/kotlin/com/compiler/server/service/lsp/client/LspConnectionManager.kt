@@ -5,6 +5,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.eclipse.lsp4j.launch.LSPLauncher
 import org.eclipse.lsp4j.services.LanguageClient
@@ -18,6 +19,7 @@ import java.util.concurrent.Future
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.pow
 import kotlin.random.Random
+import kotlin.time.Duration.Companion.milliseconds
 
 
 internal class LspConnectionManager(
@@ -36,6 +38,7 @@ internal class LspConnectionManager(
     private var listenFuture: Future<Void>? = null
 
     private val isClosing = AtomicBoolean(false)
+    private val reconnecting = AtomicBoolean(false)
 
     private val scope = CoroutineScope(Dispatchers.IO + Job())
 
@@ -101,17 +104,28 @@ internal class LspConnectionManager(
 
     private fun handleDisconnectAndReconnect() {
         if (isClosing.get()) return
+        if (!reconnecting.compareAndSet(false, true)) {
+            logger.debug("Reconnect already in progress, skipping duplicate trigger")
+            return
+        }
+
         notifyDisconnected()
         tearDown()
 
-        var attempt = 0
-        while (!isClosing.get() && attempt < maxConnectionRetries) {
+        scope.launch {
+            var attempt = 0
             try {
-                if (attempt > 0) Thread.sleep(exponentialBackoffMillis(attempt).toLong())
-                connect()
-                return
-            } catch (t: Throwable) {
-                logger.info("Reconnect attempt {} failed: {}", ++attempt, t.message)
+                while (!isClosing.get() && attempt < maxConnectionRetries) {
+                    try {
+                        if (attempt > 0) delay(exponentialBackoffMillis(attempt).milliseconds)
+                        connect()
+                        return@launch
+                    } catch (t: Throwable) {
+                        logger.info("Reconnect attempt {} failed: {}", ++attempt, t.message)
+                    }
+                }
+            } finally {
+                reconnecting.set(false)
             }
         }
     }
