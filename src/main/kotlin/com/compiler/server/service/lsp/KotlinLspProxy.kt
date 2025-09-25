@@ -148,10 +148,21 @@ class KotlinLspProxy {
         lspProjects.clear()
     }
 
-    private fun wireAvailabilityObservers(client: LspClient) {
+    fun wireAvailabilityObservers(client: LspClient) {
         (client as? RetriableLspClient)?.let { lspClient ->
-            lspClient.addOnDisconnectListener { available.set(false) }
-            lspClient.addOnReconnectListener { available.set(true) } // TODO: understand how to restore the state
+            lspClient.addOnDisconnectListener {
+                lspClientInitializedDeferred = CompletableDeferred()
+                available.set(false)
+            }
+            lspClient.addOnReconnectListener {
+                lspProjects.forEach { (project, lspProject) ->
+                    val file = project.files.first()
+                    val uri = lspProject.getDocumentUri(file.name) ?: return@forEach
+                    client.openDocument(uri, file.text)
+                }
+                lspClientInitializedDeferred.complete(Unit)
+                available.set(true)
+            }
         }
     }
 
