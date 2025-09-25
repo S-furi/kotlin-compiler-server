@@ -19,6 +19,7 @@ import java.net.URI
 import java.nio.file.Path
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.time.Duration.Companion.seconds
 
 @Component
 class KotlinLspProxy {
@@ -120,7 +121,7 @@ class KotlinLspProxy {
                 if (!lspClientInitializedDeferred.isCompleted) {
                     lspClientInitializedDeferred.await()
                 }
-                client.awaitReady()
+                client.awaitReady(60.seconds)
                 available.set(true)
             } catch (e: Exception) {
                 throw LspUnavailableException(e.message ?: "Lsp client is not available")

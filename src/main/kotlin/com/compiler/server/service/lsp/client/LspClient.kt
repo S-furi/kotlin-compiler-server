@@ -8,11 +8,19 @@ import org.eclipse.lsp4j.Position
 import org.eclipse.lsp4j.jsonrpc.ResponseErrorException
 import org.eclipse.lsp4j.jsonrpc.messages.ResponseErrorCode
 import java.util.concurrent.CompletableFuture
+import kotlin.time.Duration
 
 interface LspClient : AutoCloseable {
     fun initRequest(kotlinProjectRoot: String, projectName: String = "None"): CompletableFuture<Void>
 
-    suspend fun awaitReady()
+    /**
+     * Wait until the client is ready. If [timeout] is specified, this method will throw a [kotlinx.coroutines.TimeoutCancellationException]
+     * if the client is not ready within the specified time.
+     *
+     * @param timeout the maximum time to wait for the client to be ready, or `null` to wait indefinitely
+     * @throws kotlinx.coroutines.TimeoutCancellationException if the client is not ready within the specified time
+     */
+    suspend fun awaitReady(timeout: Duration? = null)
 
     fun isReady(): Boolean
 
