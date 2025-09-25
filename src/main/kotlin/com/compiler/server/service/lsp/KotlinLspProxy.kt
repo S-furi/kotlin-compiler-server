@@ -232,6 +232,6 @@ object StatefulKotlinLspProxy {
 
     private fun KotlinLspProxy.changeDocumentContent(lspProject: LspProject, documentToChange: String, newContent: String) {
         lspProject.changeDocumentContents(documentToChange, newContent)
-        client.changeDocument(lspProject.getDocumentUri(documentToChange)!!, newContent)
+        client.changeDocument(lspProject.getDocumentUri(documentToChange)!!, newContent, lspProject.version)
     }
 }

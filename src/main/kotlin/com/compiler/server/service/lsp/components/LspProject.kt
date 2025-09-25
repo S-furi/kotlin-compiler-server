@@ -16,6 +16,8 @@ class LspProject(
 ) {
     private val projectRoot: Path = baseDir.resolve("$confType-${ownerId ?: UUID.randomUUID().toString()}")
     private val documentsToPaths: MutableMap<String, Path> = mutableMapOf()
+    var version: Int = 0
+        private set
 
     init {
         projectRoot.toFile().mkdirs()
@@ -28,6 +30,7 @@ class LspProject(
 
     fun changeDocumentContents(name: String, newContents: String) {
         documentsToPaths[name]?.toFile()?.writeText(newContents)
+        version++
     }
 
     fun getDocumentUri(name: String): String? = documentsToPaths[name]?.toUri()?.toString()
