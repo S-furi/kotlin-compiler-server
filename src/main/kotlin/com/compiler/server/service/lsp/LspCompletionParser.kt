@@ -1,6 +1,5 @@
 package com.compiler.server.service.lsp
 
-import com.compiler.server.compiler.components.CompletionProvider
 import org.eclipse.lsp4j.CompletionItem
 import model.Completion
 import model.Icon
@@ -105,9 +104,10 @@ object LspCompletionParser {
             it in excludeFromCompletion || excludeFromCompletion.any { prefix -> it.startsWith(prefix) }
         }
 
+    // TODO(Furi): include what was excluded in previous completion results
     private val excludeFromCompletion = listOf(
         "jdk.internal",
-    ) + CompletionProvider.excludedFromCompletion
+    )
 }
 
 internal object FuzzyCompletionRanking {

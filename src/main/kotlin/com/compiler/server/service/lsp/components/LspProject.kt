@@ -67,7 +67,7 @@ class LspProject(
          * If and when kotlin LSP support other project types, this function can be updated.
          */
         private fun ensureSupportedConfType(projectType: ProjectType): ProjectType {
-            require(projectType.isJvmRelated()) { "Only JVM related projects are supported" }
+            require(projectType == ProjectType.JAVA) { "Only JVM related projects are supported" }
             return projectType
         }
     }

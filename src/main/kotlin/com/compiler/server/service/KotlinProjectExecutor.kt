@@ -7,9 +7,6 @@ import com.compiler.server.model.bean.VersionInfo
 import component.KotlinEnvironment
 import model.Completion
 import org.junit.Ignore
-import org.jetbrains.kotlin.cli.jvm.compiler.KotlinCoreEnvironment
-import org.jetbrains.kotlin.config.languageVersionSettings
-import org.jetbrains.kotlin.psi.KtFile
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
 
@@ -53,19 +50,11 @@ class KotlinProjectExecutor(
         return emptyList()
     }
 
-    suspend fun completeWithLsp(project: Project, line: Int, character: Int): List<Completion> {
-        val file = kotlinEnvironment.environment { getFilesFrom(project, it).first() }
-        return with (file.kotlinFile) {
-            lspCompletionProvider.complete(project, line, character)
-        }
-    }
+    suspend fun completeWithLsp(project: Project, line: Int, character: Int): List<Completion> =
+        lspCompletionProvider.complete(project, line, character)
 
-    suspend fun completeWithLsp(clientId: String, project: Project, line: Int, character: Int): List<Completion> {
-        val file = kotlinEnvironment.environment { getFilesFrom(project, it).first() }
-        return with (file.kotlinFile) {
+    suspend fun completeWithLsp(clientId: String, project: Project, line: Int, character: Int): List<Completion> =
             lspCompletionProvider.complete(clientId, project, line, character)
-        }
-    }
 
     fun highlight(project: Project): CompilerDiagnostics = try {
         when (project.confType) {

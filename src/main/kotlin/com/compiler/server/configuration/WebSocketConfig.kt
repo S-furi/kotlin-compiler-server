@@ -18,10 +18,10 @@ import org.springframework.web.socket.server.standard.ServletServerContainerFact
 class WebSocketConfig : WebSocketConfigurer {
 
     @Autowired
-    private lateinit var handler: LspCompletionWebSocketHandler
+    private lateinit var completionHandler: LspCompletionWebSocketHandler
 
     override fun registerWebSocketHandlers(registry: WebSocketHandlerRegistry) {
-        registry.addHandler(handler, "/lsp/complete")
+        registry.addHandler(completionHandler, "/lsp/complete")
             .setAllowedOrigins(ACCESS_CONTROL_ALLOW_ORIGIN_VALUE)
     }
 
