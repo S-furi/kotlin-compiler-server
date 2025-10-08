@@ -1,2 +1,2 @@
 * text=auto eol=lf
-src/test/resources/lsp/server/intellij-lsp-0.0.1-SNAPSHOT-linux-aarch64.zip filter=lfs diff=lfs merge=lfs -text
+completions/src/test/resources/lsp/server/intellij-lsp-253.26284.0-linux-aarch64.zip filter=lfs diff=lfs merge=lfs -text
