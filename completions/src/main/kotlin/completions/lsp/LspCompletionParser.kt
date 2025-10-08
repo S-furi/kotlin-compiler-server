@@ -11,6 +11,9 @@ import org.eclipse.lsp4j.CompletionItemLabelDetails
 
 object LspCompletionParser {
 
+    /**
+     * Converts a `CompletionItem` into a `Completion` by extracting and processing its details.
+     */
     fun CompletionItem.toCompletion(): Completion? {
         val (functionParams, importPrefix) = extractParamsAndImportFromLabelDetails(labelDetails)
         if (importPrefix != null && isInternalImport(importPrefix)) return null
@@ -114,6 +117,9 @@ internal object FuzzyCompletionRanking {
     private data class RankedItem(val item: CompletionItem, val score: Int)
     private val json = Json { ignoreUnknownKeys = true }
 
+    /**
+     * Extracts the prefix of this [CompletionItem] that triggered the completion.
+     */
     val CompletionItem.completionQuery: String?
         get() = json.parseToJsonElement(data.toString()).jsonObject["additionalData"]
                 ?.jsonObject?.get("prefix")

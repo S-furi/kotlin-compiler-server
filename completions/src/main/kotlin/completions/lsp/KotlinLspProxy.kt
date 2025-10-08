@@ -116,6 +116,11 @@ class KotlinLspProxy {
 
     fun isAvailable(): Boolean = available.get()
 
+    /**
+     * Checks whether the LSP client is available. If not, it will be initialized.
+     *
+     * @throws LspUnavailableException if the client is not available after 60 seconds
+     */
     suspend fun requireAvailable() {
         if (!isAvailable()) {
             try {
@@ -151,6 +156,16 @@ class KotlinLspProxy {
         lspProjects.clear()
     }
 
+    /**
+     * Configures availability observers for the provided [LspClient].
+     * If the client is of type `ReconnectingLspClient`, this method sets up listeners to handle
+     * client disconnection and reconnection events, ensuring proper maintenance of the client's state.
+     *
+     * On disconnect, the method updates the availability status and resets the necessary internal states.
+     * On reconnect, it reopens documents, resets their versions, and updates the availability status.
+     *
+     * @param client the LSP client to which the availability observers will be wired
+     */
     fun wireAvailabilityObservers(client: LspClient) {
         (client as? ReconnectingLspClient)?.let { lspClient ->
             lspClient.addOnDisconnectListener {
@@ -240,6 +255,12 @@ object StatefulKotlinLspProxy {
         return getCompletions(lspProject, line, ch, documentToChange)
     }
 
+    /**
+     * This method initializes a new project for the connected client, sets up an LSP project
+     * from the initialized project, and opens all relevant document URIs within the project.
+     *
+     * @param clientId the unique identifier for the client that has connected
+     */
     fun KotlinLspProxy.onClientConnected(clientId: String) {
         val project = Project(files = listOf(ProjectFile(name = "$clientId.kt")))
             .also { clientsProjects[clientId] = it }
@@ -247,6 +268,12 @@ object StatefulKotlinLspProxy {
         lspProject.getDocumentsUris().forEach { uri -> lspClient.openDocument(uri, "", 1) }
     }
 
+    /**
+     * This method closes the LSP project for the connected client and removes the project from the proxy
+     * and free up its resources.
+     *
+     * @param clientId the unique identifier for the client that has disconnected
+     */
     fun KotlinLspProxy.onClientDisconnected(clientId: String) {
         clientsProjects[clientId]?.let {
             closeProject(it)

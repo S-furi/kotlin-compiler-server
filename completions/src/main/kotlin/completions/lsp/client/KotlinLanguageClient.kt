@@ -8,6 +8,9 @@ import org.eclipse.lsp4j.services.LanguageClient
 import org.slf4j.LoggerFactory
 import java.util.concurrent.CompletableFuture
 
+/**
+ * Basic implementation of [LanguageClient], which just logs all received messages.
+ */
 class KotlinLanguageClient : LanguageClient {
     private val logger = LoggerFactory.getLogger(this::class.java)
 

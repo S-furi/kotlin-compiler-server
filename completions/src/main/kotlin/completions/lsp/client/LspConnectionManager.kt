@@ -47,6 +47,12 @@ internal class LspConnectionManager(
     private val disconnectListeners = mutableListOf<() -> Unit>()
     private val reconnectListeners = mutableListOf<() -> Unit>()
 
+    /**
+     * Connects to the language server, if not already connected.
+     *
+     * @param initial Whether this is the initial connection attempt. If false,
+     *                all reconnection listeners will be notified.
+     */
     @Synchronized
     fun ensureConnected(initial: Boolean = false): LanguageServer {
         if (isClosing.get()) error("Connection manager is closing or already closed")

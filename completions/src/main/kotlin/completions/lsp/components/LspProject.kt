@@ -10,6 +10,15 @@ import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
 
+/**
+ * Represents a LSP project. This class manages documents, their versions,
+ * and the project's filesystem structure. It facilitates tasks such as creating a project workspace,
+ * managing documents within that workspace, and tearing down the workspace when it's no longer needed.
+ *
+ * @property confType The configuration type of the project, defaulting to `ProjectType.JAVA`.
+ * @property files A list of [LspDocument] objects representing project files.
+ * @property ownerId An optional identifier for the owner of the project.
+ */
 @JsonIgnoreProperties(value = ["ownerId"])
 class LspProject(
     confType: ProjectType = ProjectType.JAVA,
@@ -29,12 +38,18 @@ class LspProject(
         }
     }
 
+    /**
+     * Updates the contents of a document in the project.
+     */
     @Synchronized
     fun changeDocumentContents(name: String, newContents: String) {
         documentsToPaths[name]?.toFile()?.writeText(newContents)
         documentsVersions[name]?.incrementAndGet()
     }
 
+    /**
+     * Returns the URI of a document in the project compliant with the [completions.lsp.client.LspClient].
+     */
     fun getDocumentUri(name: String): String? = documentsToPaths[name]?.toUri()?.toString()
 
     fun getDocumentsUris(): List<String> = documentsToPaths.keys.mapNotNull { getDocumentUri(it) }
@@ -47,6 +62,9 @@ class LspProject(
         documentsVersions[name]?.set(1)
     }
 
+    /**
+     * Tears down the project workspace and deletes all project files.
+     */
     fun tearDown() {
         documentsToPaths.values.forEach { it.toFile().delete() }
         projectRoot.toFile().delete()
@@ -55,6 +73,14 @@ class LspProject(
     companion object {
         private val baseDir = Path.of(KotlinLspProxy.lspLocalWorkspaceRoot()).toAbsolutePath()
 
+        /**
+         * Creates a new instance of [LspProject] based on the provided [Project] data.
+         * Please note that currently only JVM-related projects are supported.
+         *
+         * @param project the source project containing configuration type and a list of files
+         * @param ownerId optional identifier for the owner of the project
+         * @return a new [LspProject] instance with the provided project's configuration type and files
+         */
         fun fromProject(project: Project, ownerId: String? = null): LspProject {
             return LspProject(
                 confType = ensureSupportedConfType(project.confType),
