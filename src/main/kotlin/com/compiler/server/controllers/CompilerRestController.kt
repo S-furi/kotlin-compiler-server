@@ -44,13 +44,6 @@ class CompilerRestController(private val kotlinProjectExecutor: KotlinProjectExe
     @RequestParam ch: Int
   ) = kotlinProjectExecutor.complete(project, line, ch)
 
-  @PostMapping("/lsp/complete")
-  suspend fun getKotlinLspCompleteEndpoint(
-      @RequestBody project: Project,
-      @RequestParam line: Int,
-      @RequestParam ch: Int
-  ) = kotlinProjectExecutor.completeWithLsp(project, line, ch)
-
   @PostMapping("/highlight")
   fun highlightEndpoint(@RequestBody project: Project): CompilerDiagnostics =
     kotlinProjectExecutor.highlight(project)

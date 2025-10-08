@@ -12,6 +12,7 @@ kotlinx-datetime = "0.7.1-0.6.x-compat"
 kotlinx-io = "0.8.0"
 kotlinx-serialization = "1.9.0"
 lsp4j = "0.24.0"
+reactor = "3.7.11"
 skiko = "0.9.24"
 testcontainers = "1.21.3"
 # don't forget to update jackson version in `executor.policy` file.
@@ -41,6 +42,7 @@ kotlinx-io-core = { group = "org.jetbrains.kotlinx", name = "kotlinx-io-core", v
 kotlinx-serialization-json-jvm = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json-jvm", version.ref = "kotlinx-serialization" }
 kotlinx-serialization-core-jvm = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-core-jvm", version.ref = "kotlinx-serialization" }
 org-eclipse-lsp4j = { group = "org.eclipse.lsp4j", name = "org.eclipse.lsp4j", version.ref = "lsp4j" }
+rector-test = { group = "io.projectreactor", name = "reactor-test", version.ref = "reactor" }
 springdoc = { group = "org.springdoc", name = "springdoc-openapi-starter-webmvc-ui", version.ref = "springdoc" }
 aws-springboot-container = { group = "com.amazonaws.serverless", name = "aws-serverless-java-container-springboot3", version.ref = "aws-serverless-java-container-springboot3" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
