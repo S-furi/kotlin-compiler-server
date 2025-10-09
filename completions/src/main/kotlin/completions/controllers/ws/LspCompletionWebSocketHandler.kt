@@ -16,7 +16,6 @@ import org.springframework.stereotype.Component
 import org.springframework.web.reactive.socket.WebSocketHandler
 import org.springframework.web.reactive.socket.WebSocketMessage
 import org.springframework.web.reactive.socket.WebSocketSession
-import reactor.core.publisher.BufferOverflowStrategy
 import reactor.core.publisher.Flux
 import reactor.core.publisher.Mono
 import reactor.core.publisher.Sinks
@@ -59,7 +58,11 @@ class LspCompletionWebSocketHandler(
     private fun getCompletionRequests(session: WebSocketSession, sideSink: Sinks.Many<Response>): Flux<CompletionRequest> =
         session.receive()
             .map { it.payloadAsText }
-            .subscribeOn(Schedulers.boundedElastic())
+            .onBackpressureDrop { dropped ->
+                runCatching { objectReader.readValue<CompletionRequest>(dropped) }.onSuccess {
+                    sideSink.tryEmitNext(Response.Discarded(it.requestId))
+                }
+            }
             .flatMap({ payload ->
                 val req = runCatching { objectReader.readValue<CompletionRequest>(payload) }.getOrNull()
                 if (req == null) {
@@ -68,16 +71,10 @@ class LspCompletionWebSocketHandler(
                 } else {
                     Mono.just(req)
                 }
-            }, 1) // limit parallelism to 1
-            .onBackpressureBuffer( // conflate behaviour
-                1,
-                { dropped -> sideSink.tryEmitNext(Response.Discarded(dropped.requestId)) },
-                BufferOverflowStrategy.DROP_OLDEST
-            )
+            }, 1)
 
     private fun handleCompletionRequest(sessionId: String, requests: Flux<CompletionRequest>): Flux<Response> =
         requests
-            .subscribeOn(Schedulers.boundedElastic())
             .concatMap({ request ->
             mono {
                 lspProxy.requireAvailable()
