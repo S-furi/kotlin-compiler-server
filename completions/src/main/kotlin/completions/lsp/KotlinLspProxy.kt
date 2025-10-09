@@ -52,12 +52,17 @@ class KotlinLspProxy {
      * @param project the project containing the file
      * @param line the line number
      * @param ch the character position
+     * @param projectFile the file to be used for completion, defaults to the first file in the project
      * @return a list of [CompletionItem]s
      */
-    suspend fun getOneTimeCompletions(project: Project, line: Int, ch: Int): List<CompletionItem> {
+    suspend fun getOneTimeCompletions(
+        project: Project,
+        line: Int,
+        ch: Int,
+        projectFile: ProjectFile = project.files.first(),
+    ): List<CompletionItem> {
         ensureLspClientReady() ?: return emptyList()
         val lspProject = lspProjects.getOrPut(project) { createNewProject(project) }
-        val projectFile = project.files.first()
         val uri = lspProject.getDocumentUri(projectFile.name) ?: return emptyList()
         lspClient.openDocument(uri, projectFile.text, 1)
         return getCompletions(lspProject, line, ch, projectFile.name)
@@ -68,6 +73,7 @@ class KotlinLspProxy {
      * Retrieve completions for a given line and character position in a project file. By now
      *
      * - We assume that the project contains a single file;
+     *   - TODO(KTL-3757): support multiple files in the same project
      * - Changes arrive **before** completion is triggered.
      *
      * Changes are not incremental, whole file content is transmitted. Future support
@@ -223,6 +229,16 @@ class KotlinLspProxy {
     }
 }
 
+/**
+ * This extension object manages stateful operations for interacting with a Kotlin-based LSP client.
+ * It provides functionality for handling client connections, managing associated project states, and performing
+ * completion operations or modifying documents contents.
+ *
+ * Note: regarding KTL-3757, this extension object is ready to support multiple files in the same project,
+ * but some mechanisms of resources releasing must be taken into account because currently we take care of
+ * opening new documents, but not closing them when client closes/deletes them.
+ * Custom WS messages could be designed to handle this.
+ */
 object StatefulKotlinLspProxy {
     private val clientsProjects = ConcurrentHashMap<String, Project>()
 
@@ -245,12 +261,14 @@ object StatefulKotlinLspProxy {
         clientId: String,
         newProject: Project,
         line: Int,
-        ch: Int
+        ch: Int,
+        projectFile: ProjectFile = newProject.files.first(),
     ): List<CompletionItem> {
-        val project = clientsProjects[clientId] ?: return emptyList()
+        val project =
+            clientsProjects[clientId]?.let { ensureDocumentPresent(it, projectFile, clientId) } ?: return emptyList()
         val lspProject = lspProjects[project] ?: return emptyList()
-        val newContent = newProject.files.first().text
-        val documentToChange = project.files.first().name
+        val newContent = projectFile.text
+        val documentToChange = projectFile.name
         changeDocumentContent(lspProject, documentToChange, newContent)
         return getCompletions(lspProject, line, ch, documentToChange)
     }
@@ -262,7 +280,7 @@ object StatefulKotlinLspProxy {
      * @param clientId the unique identifier for the client that has connected
      */
     fun KotlinLspProxy.onClientConnected(clientId: String) {
-        val project = Project(files = listOf(ProjectFile(name = "$clientId.kt")))
+        val project = Project()
             .also { clientsProjects[clientId] = it }
         val lspProject = LspProject.fromProject(project).also { lspProjects[project] = it }
         lspProject.getDocumentsUris().forEach { uri -> lspClient.openDocument(uri, "", 1) }
@@ -270,7 +288,7 @@ object StatefulKotlinLspProxy {
 
     /**
      * This method closes the LSP project for the connected client and removes the project from the proxy
-     * and free up its resources.
+     * and frees up its resources.
      *
      * @param clientId the unique identifier for the client that has disconnected
      */
@@ -278,6 +296,27 @@ object StatefulKotlinLspProxy {
         clientsProjects[clientId]?.let {
             closeProject(it)
             clientsProjects.remove(clientId)
+        }
+    }
+
+    /**
+     * Ensure that the provided project contains the specified file; if the file is not present,
+     * it will be added to the project and open the file in the LSP client.
+     *
+     * @param project the project to be modified if necessary
+     * @param projectFile the file to be opened if not present in the project
+     * @return the modified project, with the file added if necessary
+     */
+    private fun KotlinLspProxy.ensureDocumentPresent(project: Project, projectFile: ProjectFile, clientId: String): Project {
+        if (project.files.contains(projectFile)) return project
+        lspProjects.remove(project)
+        val newProject = project.copy(files = project.files + projectFile)
+        val newLspProject = LspProject.fromProject(newProject)
+        lspProjects[newProject] = newLspProject
+        clientsProjects[clientId] = newProject
+        return newProject.also {
+            val uri = newLspProject.getDocumentUri(projectFile.name) ?: return@also
+            lspClient.openDocument(uri, projectFile.text, 1)
         }
     }
 
