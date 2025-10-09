@@ -33,85 +33,104 @@ class LspCompletionWebSocketHandler(
     override fun handle(session: WebSocketSession): Mono<Void?> {
         val sessionId = session.id
 
-        val init: Mono<WSResponse> = mono {
-            runCatching {
-                lspProxy.requireAvailable()
-                lspProxy.onClientConnected(sessionId)
-                WSResponse.Init(sessionId)
-            }.getOrElse { WSResponse.Error("LSP not available: ${it.message}") }
-        }.subscribeOn(Schedulers.boundedElastic())
-
-        val sideSink = Sinks.many().unicast().onBackpressureBuffer<WSResponse>()
+        val sideSink = Sinks.many().unicast().onBackpressureBuffer<Response>()
         val sideFlux = sideSink.asFlux()
 
-        val requests: Flux<WsCompletionRequest> =
-            session.receive()
-                .map { it.payloadAsText }
-                .flatMap({ payload ->
-                    val req = runCatching { objectReader.readValue<WsCompletionRequest>(payload) }.getOrNull()
-                    if (req == null) {
-                        sideSink.tryEmitNext(WSResponse.Error("Failed to parse request: $payload"))
-                        Mono.empty()
-                    } else {
-                        Mono.just(req)
-                    }
-                }, 1)
-                .onBackpressureBuffer(
-                    1,
-                    { dropped -> sideSink.tryEmitNext(WSResponse.Discarded(dropped.requestId)) },
-                    BufferOverflowStrategy.DROP_OLDEST
-                )
+        val completions = handleCompletionRequest(
+            sessionId = sessionId,
+            requests = getCompletionRequests(session, sideSink)
+        )
 
-        val completions: Flux<WSResponse> =
-            requests.concatMap({ request ->
-                mono {
-                    lspProxy.requireAvailable()
-                    lspCompletionProvider.complete(
-                        clientId = sessionId,
-                        project = request.project,
-                        line = request.line,
-                        ch = request.ch,
-                        applyFuzzyRanking = true,
-                    )
+        return session.startCompletionHandler(
+            initial = getInitialMono(sessionId),
+            completions,
+            sideFlux,
+        )
+    }
+
+    private fun getInitialMono(sessionId: String): Mono<Response> = mono {
+        runCatching {
+            lspProxy.requireAvailable()
+            lspProxy.onClientConnected(sessionId)
+            Response.Init(sessionId)
+        }.getOrElse { Response.Error("LSP not available: ${it.message}") }
+    }.subscribeOn(Schedulers.boundedElastic())
+
+    private fun getCompletionRequests(session: WebSocketSession, sideSink: Sinks.Many<Response>): Flux<CompletionRequest> =
+        session.receive()
+            .map { it.payloadAsText }
+            .subscribeOn(Schedulers.boundedElastic())
+            .flatMap({ payload ->
+                val req = runCatching { objectReader.readValue<CompletionRequest>(payload) }.getOrNull()
+                if (req == null) {
+                    sideSink.tryEmitNext(Response.Error("Failed to parse request: $payload"))
+                    Mono.empty()
+                } else {
+                    Mono.just(req)
                 }
-                    .subscribeOn(Schedulers.boundedElastic())
-                    .map<WSResponse> { WSResponse.Completions(it, request.requestId) }
-                    .onErrorResume { e ->
-                        logger.warn("Completion processing failed for client $sessionId:", e)
-                        Mono.just<WSResponse>(WSResponse.Error(e.message ?: "Unknown error", request.requestId))
-                    }
-            }, 1)
+            }, 1) // limit parallelism to 1
+            .onBackpressureBuffer( // conflate behaviour
+                1,
+                { dropped -> sideSink.tryEmitNext(Response.Discarded(dropped.requestId)) },
+                BufferOverflowStrategy.DROP_OLDEST
+            )
 
+    private fun handleCompletionRequest(sessionId: String, requests: Flux<CompletionRequest>): Flux<Response> =
+        requests
+            .subscribeOn(Schedulers.boundedElastic())
+            .concatMap({ request ->
+            mono {
+                lspProxy.requireAvailable()
+                lspCompletionProvider.complete(
+                    clientId = sessionId,
+                    project = request.project,
+                    line = request.line,
+                    ch = request.ch,
+                    applyFuzzyRanking = true,
+                )
+            }
+                .subscribeOn(Schedulers.boundedElastic())
+                .map<Response> { Response.Completions(it, request.requestId) }
+                .onErrorResume { e ->
+                    logger.warn("Completion processing failed for client $sessionId:", e)
+                    Mono.just<Response>(Response.Error(e.message ?: "Unknown error", request.requestId))
+                }
+        }, 1)
+
+    private fun WebSocketSession.startCompletionHandler(
+        initial: Mono<Response>,
+        vararg outboundFluxes: Flux<Response>,
+    ): Mono<Void?> {
         val outbound: Flux<WebSocketMessage> =
-            Flux.merge(sideFlux, completions)
-                .startWith(init)
-                .map { session.textMessage(it.toJson()) }
+            Flux.merge(outboundFluxes.toList())
+                .startWith(initial)
+                .map { textMessage(it.toJson()) }
 
-        return session.send(outbound)
-            .doOnError { logger.warn("WS session error for client $sessionId: ${it.message}") }
+        return send(outbound)
+            .doOnError { logger.warn("WS session error for client $id: ${it.message}") }
             .doFinally {
-                runCatching { lspProxy.onClientDisconnected(sessionId) }
-                runCatching { session.close() }
+                runCatching { lspProxy.onClientDisconnected(id) }
+                runCatching { close() }
             }
     }
 
     companion object {
-        private val objectReader = objectMapper.readerFor(WsCompletionRequest::class.java)
+        private val objectReader = objectMapper.readerFor(CompletionRequest::class.java)
     }
 }
 
-sealed interface WSResponse {
+sealed interface Response {
     val requestId: String?
 
-    open class Error(val message: String, override val requestId: String? = null) : WSResponse
-    data class Init(val sessionId: String, override val requestId: String? = null) : WSResponse
-    data class Completions(val completions: List<Completion>, override val requestId: String? = null) : WSResponse
+    open class Error(val message: String, override val requestId: String? = null) : Response
+    data class Init(val sessionId: String, override val requestId: String? = null) : Response
+    data class Completions(val completions: List<Completion>, override val requestId: String? = null) : Response
     data class Discarded(override val requestId: String) : Error("discarded", requestId)
 
     fun toJson(): String = objectMapper.writeValueAsString(this)
 }
 
-private data class WsCompletionRequest(
+private data class CompletionRequest(
     val requestId: String,
     val project: Project,
     val line: Int,
