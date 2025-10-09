@@ -39,8 +39,6 @@ dependencies {
     annotationProcessor("org.springframework:spring-context-indexer")
     implementation("com.google.code.gson:gson")
     implementation("org.springframework.boot:spring-boot-starter-web")
-    implementation("org.springframework.boot:spring-boot-starter-webflux")
-    implementation("org.springframework.boot:spring-boot-starter-websocket")
     implementation(libs.springdoc)
     implementation(libs.aws.springboot.container)
     implementation(libs.junit)
@@ -52,17 +50,12 @@ dependencies {
     implementation(project(":executors", configuration = "default"))
     implementation(project(":common", configuration = "default"))
     implementation(project(":dependencies"))
-    implementation(libs.org.eclipse.lsp4j)
-    implementation(libs.kotlinx.coroutines.reactor)
-    implementation(libs.kotlinx.serialization.core.jvm)
-    implementation(libs.kotlinx.serialization.json.jvm)
 
     testImplementation(libs.kotlin.test)
     testImplementation("org.springframework.boot:spring-boot-starter-test") {
         exclude(group = "org.junit.vintage", module = "junit-vintage-engine")
     }
     testImplementation(libs.kotlinx.coroutines.test)
-    testImplementation(libs.bundles.testcontainers)
 
     resourceDependency(libs.skiko.js.wasm.runtime)
 }
@@ -154,9 +147,4 @@ tasks.withType<Test> {
     doFirst {
         this@withType.environment("kotlin.wasm.node.path", executablePath)
     }
-}
-
-val compileKotlin: KotlinCompile by tasks
-compileKotlin.compilerOptions {
-    freeCompilerArgs.set(listOf("-Xcontext-parameters"))
 }
