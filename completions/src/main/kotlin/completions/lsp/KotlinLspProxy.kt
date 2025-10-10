@@ -222,7 +222,6 @@ class KotlinLspProxy {
             System.getProperty("LSP_USERS_PROJECTS_ROOT")
                 ?: System.getProperty("LSP_USERS_PROJECTS_ROOT")
                 ?: run {
-                    logger.warn("LSP_USERS_PROJECTS_ROOT system property not set, using default")
                     KotlinLspProxy::class.java.getResource("/lsp-users-projects-root")?.path
                         ?: error("Could not find default workspace path")
                 }
