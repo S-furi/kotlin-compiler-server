@@ -8,11 +8,11 @@ import org.springframework.web.reactive.handler.SimpleUrlHandlerMapping
 import org.springframework.web.reactive.socket.server.support.WebSocketHandlerAdapter
 
 @Configuration
-class WebSocketConfig {
+class WebSocketConfiguration {
     @Bean
     fun webSocketHandlerAdapter(): WebSocketHandlerAdapter = WebSocketHandlerAdapter()
 
     @Bean
     fun webSocketMapping(handler: LspCompletionWebSocketHandler): HandlerMapping =
-        SimpleUrlHandlerMapping(mapOf("/completions/lsp/complete" to handler), 1)
+        SimpleUrlHandlerMapping(mapOf("/api/complete" to handler), 1)
 }
