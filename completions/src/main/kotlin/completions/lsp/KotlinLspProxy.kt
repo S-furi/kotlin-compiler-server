@@ -282,7 +282,7 @@ object StatefulKotlinLspProxy {
     fun KotlinLspProxy.onClientConnected(clientId: String) {
         val project = Project()
             .also { clientsProjects[clientId] = it }
-        val lspProject = LspProject.fromProject(project).also { lspProjects[project] = it }
+        val lspProject = LspProject.fromProject(project, ownerId = clientId).also { lspProjects[project] = it }
         lspProject.getDocumentsUris().forEach { uri -> lspClient.openDocument(uri, "", 1) }
     }
 
@@ -311,7 +311,7 @@ object StatefulKotlinLspProxy {
         if (project.files.contains(projectFile)) return project
         lspProjects.remove(project)
         val newProject = project.copy(files = project.files + projectFile)
-        val newLspProject = LspProject.fromProject(newProject)
+        val newLspProject = LspProject.fromProject(newProject, ownerId = clientId)
         lspProjects[newProject] = newLspProject
         clientsProjects[clientId] = newProject
         newLspProject.getDocumentUri(projectFile.name)?.let { uri ->
