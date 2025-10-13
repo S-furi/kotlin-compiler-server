@@ -14,13 +14,12 @@ fun extractCaret(caretMarker: String = CARET_MARKER, code: () -> String): Pair<S
         if (idx != -1) {
             caretLine = i
             caretChar = idx
-            // Remove the placeholder
             lines[i] = line.removeRange(idx, idx + caretMarker.length)
             break
         }
     }
 
-    if (caretLine == -1 || caretChar == -1) {
+    if (caretLine == -1) {
         throw IllegalArgumentException("No \"$caretMarker\" marker found in code")
     }
 
