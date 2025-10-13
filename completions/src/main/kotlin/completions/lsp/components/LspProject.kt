@@ -1,8 +1,6 @@
 package completions.lsp.components
 
 import completions.lsp.KotlinLspProxy
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties
-import com.fasterxml.jackson.annotation.JsonValue
 import completions.model.Project
 import completions.model.ProjectType
 import java.nio.file.Path
@@ -17,9 +15,7 @@ import java.util.concurrent.atomic.AtomicInteger
  *
  * @property confType The configuration type of the project, defaulting to `ProjectType.JAVA`.
  * @property files A list of [LspDocument] objects representing project files.
- * @property ownerId An optional identifier for the owner of the project.
  */
-@JsonIgnoreProperties(value = ["ownerId"])
 class LspProject(
     confType: ProjectType = ProjectType.JAVA,
     files: List<LspDocument> = emptyList(),
@@ -38,9 +34,6 @@ class LspProject(
         }
     }
 
-    /**
-     * Updates the contents of a document in the project.
-     */
     @Synchronized
     fun changeDocumentContents(name: String, newContents: String) {
         documentsToPaths[name]?.toFile()?.writeText(newContents)
@@ -106,7 +99,7 @@ data class LspDocument(
 )
 
 @Suppress("unused")
-enum class LspProjectType(@JsonValue val id: String) {
+enum class LspProjectType(val id: String) {
     JAVA("java"),
     // add here support for JS, WASM, ...
 }
