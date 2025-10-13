@@ -41,7 +41,8 @@ class KotlinLspProxyWSTest : AbstractCompletionTest {
     @LocalServerPort
     private var port: Int = 0
     private val baseWsUrl: URI by lazy {
-        UriComponentsBuilder.fromUriString("ws://localhost:$port${WebSocketConfiguration.WEBSOCKET_PATH}").build(true).toUri()
+        UriComponentsBuilder.fromUriString("ws://localhost:$port${WebSocketConfiguration.WEBSOCKET_COMPLETIONS_PATH}")
+            .build(true).toUri()
     }
 
     private val defaultTimeout = 30.seconds

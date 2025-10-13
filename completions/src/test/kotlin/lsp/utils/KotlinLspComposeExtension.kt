@@ -21,7 +21,6 @@ internal class KotlinLspComposeExtension : BeforeAllCallback {
 
             container = ComposeContainer(File(composeFile))
                 .withExposedService("kotlin-lsp", 9999)
-                .withLocalCompose(true)
 
             container.start()
 
