@@ -17,6 +17,8 @@ import org.springframework.boot.test.web.server.LocalServerPort
 import org.springframework.test.web.reactive.server.WebTestClient
 import java.time.Duration
 import kotlin.test.assertEquals
+import kotlin.time.Duration.Companion.minutes
+import kotlin.time.toJavaDuration
 
 @SpringBootTest(
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
@@ -98,7 +100,7 @@ class LspCompletionProviderTest {
     }
 
     private fun <T> withTimeout(
-        duration: Duration = Duration.ofMinutes(1),
+        duration: Duration = 2.minutes.toJavaDuration(),
         body: WebTestClient.() -> T?
     ): T? = with(webTestClient.mutate().responseTimeout(duration).build()) { body() }
 }

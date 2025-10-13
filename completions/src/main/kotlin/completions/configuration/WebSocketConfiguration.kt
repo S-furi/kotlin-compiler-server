@@ -14,5 +14,9 @@ class WebSocketConfiguration {
 
     @Bean
     fun webSocketMapping(handler: LspCompletionWebSocketHandler): HandlerMapping =
-        SimpleUrlHandlerMapping(mapOf("/api/complete" to handler), 1)
+        SimpleUrlHandlerMapping(mapOf(WEBSOCKET_PATH to handler), 1)
+
+    companion object {
+        const val WEBSOCKET_PATH = "/api/complete"
+    }
 }

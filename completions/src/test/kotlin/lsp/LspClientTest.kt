@@ -14,6 +14,7 @@ import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertAll
 import org.junit.jupiter.api.extension.ExtendWith
+import java.util.UUID
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -38,9 +39,10 @@ class LspClientTest {
             """.trimIndent()
         }
 
-        client.openDocument(FAKE_RESOURCE_URI, code)
+        val uri = randomResourceUri
+        client.openDocument(uri, code)
         delay(1.seconds)
-        val completions = client.getCompletion(FAKE_RESOURCE_URI, position).await()
+        val completions = client.getCompletion(uri, position).await()
         assertAll(
             { assertTrue { completions.isNotEmpty() } },
             { assertContains(completions.map { it.label }, "alex") },
@@ -57,9 +59,10 @@ class LspClientTest {
                 }
             """.trimIndent()
         }
-        client.openDocument(FAKE_RESOURCE_URI, code)
+        val uri = randomResourceUri
+        client.openDocument(uri, code)
         delay(1.seconds)
-        val completions = client.getCompletion(FAKE_RESOURCE_URI, position).await()
+        val completions = client.getCompletion(uri, position).await()
         assertAll(
             { assertTrue { completions.isNotEmpty() } },
             { assertContains(completions.map { it.label }, "toInt") },
@@ -75,9 +78,10 @@ class LspClientTest {
                 }
             """.trimIndent()
         }
-        client.openDocument(FAKE_RESOURCE_URI, code)
+        val uri = randomResourceUri
+        client.openDocument(uri, code)
         delay(1.seconds)
-        val completions = client.getCompletion(FAKE_RESOURCE_URI, position).await()
+        val completions = client.getCompletion(uri, position).await()
         assertAll(
             { assertTrue { completions.isNotEmpty() } },
             { assertContains(completions.map { it.label }, "runBlocking") },
@@ -86,13 +90,19 @@ class LspClientTest {
 
     @AfterEach
     fun cleanup() = runBlocking {
-        client.closeDocument(FAKE_RESOURCE_URI)
+        openedDocuments.forEach { client.closeDocument(it) }
     }
 
     companion object {
-        private val WORKSPACE_PATH = System.getProperty("LSP_USERS_PROJECTS_ROOT") ?: "/lsp-users-projects-root"
+        private val WORKSPACE_PATH = System.getProperty("LSP_REMOTE_WORKSPACE_ROOT") ?: "/lsp-users-projects-root-test"
+        private val LSP_HOST = System.getProperty("LSP_HOST") ?: "localhost"
+        private val LSP_PORT = System.getProperty("LSP_PORT")?.toInt() ?: 9999
+
         private const val WORKSPACE_NAME = "test"
-        private const val FAKE_RESOURCE_URI = "file:///foo/bar/File.kt"
+
+        private val openedDocuments = mutableListOf<String>()
+        private val randomResourceUri
+            get() = "file:///lspClientTest/${UUID.randomUUID()}.kt".also { openedDocuments.add(it) }
 
         private lateinit var client: KotlinLspClient
 
@@ -104,7 +114,7 @@ class LspClientTest {
             if (isClientInitialized()) {
                 client.close()
             }
-            client = LspClient.createSingle(WORKSPACE_PATH, WORKSPACE_NAME)
+            client = LspClient.createSingle(WORKSPACE_PATH, WORKSPACE_NAME, host = LSP_HOST, port = LSP_PORT)
         }
 
         @AfterAll

@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.readValue
 import com.fasterxml.jackson.module.kotlin.registerKotlinModule
+import completions.configuration.WebSocketConfiguration
 import lsp.utils.KotlinLspComposeExtension
 import model.Completion
 import org.eclipse.lsp4j.Position
@@ -40,7 +41,7 @@ class KotlinLspProxyWSTest : AbstractCompletionTest {
     @LocalServerPort
     private var port: Int = 0
     private val baseWsUrl: URI by lazy {
-        UriComponentsBuilder.fromUriString("ws://localhost:$port//completions/lsp/complete").build(true).toUri()
+        UriComponentsBuilder.fromUriString("ws://localhost:$port${WebSocketConfiguration.WEBSOCKET_PATH}").build(true).toUri()
     }
 
     private val defaultTimeout = 30.seconds
