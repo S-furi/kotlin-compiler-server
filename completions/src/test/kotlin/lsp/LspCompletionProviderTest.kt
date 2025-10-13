@@ -1,5 +1,6 @@
 package lsp
 
+import AbstractCompletionTest
 import lsp.utils.CARET_MARKER
 import lsp.utils.KotlinLspComposeExtension
 import lsp.utils.extractCaret
@@ -7,6 +8,7 @@ import completions.model.Project
 import completions.model.ProjectFile
 import model.Completion
 import model.Icon
+import org.eclipse.lsp4j.Position
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertAll
 import org.junit.jupiter.api.assertNull
@@ -17,6 +19,7 @@ import org.springframework.boot.test.web.server.LocalServerPort
 import org.springframework.test.web.reactive.server.WebTestClient
 import java.time.Duration
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.toJavaDuration
 
@@ -25,7 +28,7 @@ import kotlin.time.toJavaDuration
     classes = [completions.CompletionsApplication::class]
 )
 @ExtendWith(KotlinLspComposeExtension::class)
-class LspCompletionProviderTest {
+class LspCompletionProviderTest : AbstractCompletionTest {
 
     @LocalServerPort
     private var port: Int = 0
@@ -82,10 +85,27 @@ class LspCompletionProviderTest {
         )
     }
 
-    private fun getCompletions(text: String): List<Completion> {
-        val (code, position) = extractCaret { text }
-        val project = Project(files = listOf(ProjectFile(text = code, name = "file.kt")))
+    private fun getCompletions(textWithCaret: String): List<Completion> {
+        val (code, position) = extractCaret { textWithCaret }
+        return retrieveCompletionsFromEndpoint(code, position)
+    }
 
+    override fun performCompletion(
+        code: String,
+        line: Int,
+        character: Int,
+        completions: List<String>,
+        isJs: Boolean
+    ) {
+        val caret = Position(line, character)
+        val completions = retrieveCompletionsFromEndpoint(code, caret).map { it.displayText }
+        assertAll(executables = completions.map { exp ->
+            { assertTrue(completions.any { it.contains(exp) }, "Expected completion $exp but got $completions") }
+        })
+    }
+
+    private fun retrieveCompletionsFromEndpoint(code: String, position: Position): List<Completion>  {
+        val project = Project(files = listOf(ProjectFile(text = code, name = "file.kt")))
         val url = "http://localhost:$port/api/complete/lsp?line=${position.line}&ch=${position.character}"
         return withTimeout {
             post()
@@ -97,6 +117,7 @@ class LspCompletionProviderTest {
                 .returnResult()
                 .responseBody
         } ?: emptyList()
+
     }
 
     private fun <T> withTimeout(
