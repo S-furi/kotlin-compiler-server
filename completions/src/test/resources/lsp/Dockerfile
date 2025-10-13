@@ -1,11 +1,11 @@
 FROM gradle:9-jdk-21-and-24
 
-RUN apt-get update && apt-get install -y curl zip unzip bash \
+RUN apt-get update && apt-get install -y curl zip unzip bash netcat-openbsd \
     && rm -rf /var/lib/apt/lists/*
 
 COPY lsp-users-projects-root-test/ /lsp-users-projects-root-test/
 WORKDIR /lsp
-ARG LSP_ZIP=intellij-lsp-253.26284.0-linux-aarch64.zip
+ARG LSP_ZIP=intellij-lsp-253.27396.0-linux-x64.zip
 COPY server/${LSP_ZIP} .
 RUN unzip ${LSP_ZIP} \
     && rm ${LSP_ZIP} \
