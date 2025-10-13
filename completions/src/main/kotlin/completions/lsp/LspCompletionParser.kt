@@ -21,7 +21,7 @@ object LspCompletionParser {
 
         return Completion(
             text = completionTextFromFullName(label + functionParams.orEmpty()),
-            displayText = label + (labelDetails.detail ?: ""),
+            displayText = label + (labelDetails.detail.orEmpty()),
             tail = labelDetails.description,
             import = import,
             icon = parseIcon(kind?.name)
@@ -46,38 +46,40 @@ object LspCompletionParser {
 
     private fun extractFunctionParams(detail: String): String? {
         // Skip lines that start with whitespace followed by just a package name
-        if (detail.matches(Regex("""^\s*\([a-zA-Z.]+\)\s*$"""))) {
-            return null
-        }
+        if (detail.matches(Regex("""^\s*\([a-zA-Z.]+\)\s*$""")))  return null
+
         val regex = Regex("""^\s*((?:\w+\s*)?\([^)]*\)|\([^)]*\)|\w+\s*\{.*?\})""")
         return regex.find(detail)?.groupValues?.get(1)
     }
 
     private fun extractImportFromLabelDetail(detail: String): String? {
-        val regex = Regex(
-            """\(\s*([a-zA-Z0-9_.]+)\s*\)$|for\s+\S+\s+in\s+([a-zA-Z0-9_.]+)"""
-        )
+        val regex = Regex("""\(\s*([a-zA-Z0-9_.]+)\s*\)$|for\s+\S+\s+in\s+([a-zA-Z0-9_.]+)""")
         val match = regex.find(detail) ?: return null
         return match.groupValues[1].ifEmpty { match.groupValues[2].ifEmpty { null } }
     }
 
-
+    /**
+     * Icon names differ from [model.Completion] definitions, so we just define
+     * a simple mapping between LSP results and current definitions.
+     */
     internal fun parseIcon(name: String?): Icon? {
         val iconName = name?.uppercase() ?: return null
-        return try {
-            return Icon.valueOf(iconName)
-        } catch (_: Exception) {
-            when (name) {
-                "Interface", "Enum", "Struct" -> Icon.CLASS
-                "Function" -> Icon.METHOD
-                else -> null
+        return runCatching { Icon.valueOf(iconName) }
+            .getOrElse {
+                when (name) {
+                    "Interface", "Enum", "Struct" -> Icon.CLASS
+                    "Function" -> Icon.METHOD
+                    else -> null
+                }
             }
-        }
     }
 
+    /**
+     * Checks whether this completion item has to be imported by parsing additional data
+     * of this [CompletionItem]. This additional data may include some useful information mostly
+     * related to IntelliJ lookup objects data (e.g. the `importStrategy`) and PSI data.
+     */
     private fun CompletionItem.hasToBeImported(): Boolean {
-        val objectMapper = Json { ignoreUnknownKeys = true }
-
         val lookupObject = objectMapper.parseToJsonElement(data.toString())
             .jsonObject["additionalData"]
             ?.jsonObject?.get("model")
@@ -107,7 +109,7 @@ object LspCompletionParser {
             it in excludeFromCompletion || excludeFromCompletion.any { prefix -> it.startsWith(prefix) }
         }
 
-    // TODO(Furi): include what was excluded in previous completion results
+    // TODO(Stefano Furi): include what was excluded in previous completion results
     private val excludeFromCompletion = listOf(
         "jdk.internal",
     )
@@ -115,13 +117,12 @@ object LspCompletionParser {
 
 internal object FuzzyCompletionRanking {
     private data class RankedItem(val item: CompletionItem, val score: Int)
-    private val json = Json { ignoreUnknownKeys = true }
 
     /**
      * Extracts the prefix of this [CompletionItem] that triggered the completion.
      */
     val CompletionItem.completionQuery: String?
-        get() = json.parseToJsonElement(data.toString()).jsonObject["additionalData"]
+        get() = objectMapper.parseToJsonElement(data.toString()).jsonObject["additionalData"]
                 ?.jsonObject?.get("prefix")
                 ?.jsonPrimitive?.content
 
@@ -163,3 +164,5 @@ internal object FuzzyCompletionRanking {
             .sortedWith(compareByDescending<RankedItem> { it.score }.thenBy { it.item.sortText })
             .map { it.item }
 }
+
+private val objectMapper = Json { ignoreUnknownKeys = true }
