@@ -313,10 +313,10 @@ object StatefulKotlinLspProxy {
         val newLspProject = LspProject.fromProject(newProject)
         lspProjects[newProject] = newLspProject
         clientsProjects[clientId] = newProject
-        return newProject.also {
-            val uri = newLspProject.getDocumentUri(projectFile.name) ?: return@also
+        newLspProject.getDocumentUri(projectFile.name)?.let { uri ->
             lspClient.openDocument(uri, projectFile.text, 1)
         }
+        return newProject
     }
 
     private fun KotlinLspProxy.changeDocumentContent(

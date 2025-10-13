@@ -100,23 +100,23 @@ class LspCompletionWebSocketHandler(
     private fun handleCompletionRequest(sessionId: String, requests: Flux<CompletionRequest>): Flux<Response> =
         requests
             .concatMap({ request ->
-            mono {
-                lspProxy.requireAvailable()
-                lspCompletionProvider.complete(
-                    clientId = sessionId,
-                    project = request.project,
-                    line = request.line,
-                    ch = request.ch,
-                    applyFuzzyRanking = true,
-                )
-            }
-                .subscribeOn(Schedulers.boundedElastic())
-                .map<Response> { Response.Completions(it, request.requestId) }
-                .onErrorResume { e ->
-                    logger.warn("Completion processing failed for client $sessionId:", e)
-                    Mono.just<Response>(Response.Error(e.message ?: "Unknown error", request.requestId))
+                mono {
+                    lspProxy.requireAvailable()
+                    lspCompletionProvider.complete(
+                        clientId = sessionId,
+                        project = request.project,
+                        line = request.line,
+                        ch = request.ch,
+                        applyFuzzyRanking = true,
+                    )
                 }
-        }, 1)
+                    .subscribeOn(Schedulers.boundedElastic())
+                    .map<Response> { Response.Completions(it, request.requestId) }
+                    .onErrorResume { e ->
+                        logger.warn("Completion processing failed for client $sessionId:", e)
+                        Mono.just<Response>(Response.Error(e.message ?: "Unknown error", request.requestId))
+                    }
+            }, 1)
 
     private fun WebSocketSession.startCompletionHandler(
         initial: Mono<Response>,
