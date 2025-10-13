@@ -4,7 +4,7 @@ import completions.lsp.client.LspConnectionManager.Companion.exponentialBackoffM
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.future.await
 import kotlinx.coroutines.withTimeout
 import org.eclipse.lsp4j.*
 import org.eclipse.lsp4j.jsonrpc.ResponseErrorException
@@ -17,8 +17,6 @@ import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CompletionException
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.atomic.AtomicReference
-import kotlin.coroutines.resume
-import kotlin.coroutines.resumeWithException
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
@@ -126,7 +124,7 @@ class KotlinLspClient(
         do {
             try {
                 return withTimeout(COMPLETIONS_TIMEOUT.seconds) {
-                    getCompletion(uri, position, triggerKind).awaitCancellable()
+                    getCompletion(uri, position, triggerKind).await()
                 }
             } catch (e: Throwable) {
                 when (e) {
@@ -161,6 +159,7 @@ class KotlinLspClient(
     }
 
     override fun openDocument(uri: String, content: String, version: Int, languageId: String) {
+        if (uri.isEmpty()) return
         languageServer.textDocumentService.didOpen(
             DidOpenTextDocumentParams(
                 TextDocumentItem(uri, languageId, version, content)
@@ -178,6 +177,7 @@ class KotlinLspClient(
     }
 
     override fun closeDocument(uri: String) {
+        if (uri.isEmpty()) return
         languageServer.textDocumentService.didClose(
             DidCloseTextDocumentParams(TextDocumentIdentifier(uri))
         )
@@ -190,6 +190,10 @@ class KotlinLspClient(
         connectionManager.close()
     }
 
+    /**
+     * Currently, Kotlin-lsp does not take into account client capabilities.
+     * Please refer to LSP-223.
+     */
     private fun getCompletionCapabilities() = ClientCapabilities().apply {
         textDocument = TextDocumentClientCapabilities().apply {
             completion =
@@ -222,15 +226,6 @@ class KotlinLspClient(
     override fun addOnReconnectListener(listener: () -> Unit) {
         reconnectListeners += listener
     }
-
-    private suspend fun <T> CompletableFuture<T>.awaitCancellable(): T =
-        suspendCancellableCoroutine { continuation ->
-            this.whenComplete { value, throwable ->
-                if (throwable == null) continuation.resume(value)
-                else continuation.resumeWithException(throwable)
-            }
-            continuation.invokeOnCancellation { this.cancel(true) }
-        }
 
     companion object {
         const val RECONNECT_TIMEOUT = 60
