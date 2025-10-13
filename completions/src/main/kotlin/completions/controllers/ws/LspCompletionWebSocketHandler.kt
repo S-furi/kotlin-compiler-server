@@ -21,6 +21,30 @@ import reactor.core.publisher.Mono
 import reactor.core.publisher.Sinks
 import reactor.core.scheduler.Schedulers
 
+/**
+ * WebSocket handler for stateful LSP code-completion sessions.
+ *
+ * Protocol (wire-level):
+ * - **Connection**: Server sends `Init{ sessionId }` immediately after the WebSocket is established. The client could persist
+ *   this identifier for the lifetime of the connection and treat it as the LSP client id.
+ *
+ * - **Requests**: Client sends `CompletionRequest{ requestId, project, line, ch }` for each caret position to be completed.
+ *   `requestId` must be unique per client session and is used exclusively for correlation.
+ *
+ * - **Responses**: For a successfully processed request: `Completions{ completions, requestId }` where `completions` are
+ *   a list of [Completion].If a request is dropped due to backpressure: `Discarded{ requestId }`.This is a terminal outcome
+ *   for that requestId. On failure: Error{ message, requestId? }. If requestId is present, the error pertains to that
+ *   specific request.
+ *
+ * The server serializes processing and maintains "latest-wins" semantics under pressure:
+ * - While one request is processing, newly arrived requests may be enqueued. If the inbound rate exceeds capacity,
+ *   all but the most recent enqueued request are discarded; each discarded request results in `Discarded{ requestId }`.
+ * - The in-flight request is never cancelled. It is allowed to complete and will produce either Completions or Error.
+ *
+ * The rationale for not cancelling the in-flight request is due to the condition in which, with a high request rate,
+ * cancelling the in-flight task would cause repeated aborts and potential starvation, making it possible for the client
+ * to never receive any completions at all.
+ */
 @Component
 class LspCompletionWebSocketHandler(
     private val lspProxy: KotlinLspProxy,
