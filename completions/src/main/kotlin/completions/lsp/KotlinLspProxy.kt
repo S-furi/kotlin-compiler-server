@@ -1,5 +1,6 @@
 package completions.lsp
 
+import completions.exceptions.LspUnavailableException
 import completions.lsp.client.LspClient
 import completions.lsp.client.ReconnectingLspClient
 import completions.lsp.components.LspProject
@@ -125,7 +126,7 @@ class KotlinLspProxy {
     /**
      * Checks whether the LSP client is available. If not, it will be initialized.
      *
-     * @throws LspUnavailableException if the client is not available after 60 seconds
+     * @throws completions.exceptions.LspUnavailableException if the client is not available after 60 seconds
      */
     suspend fun requireAvailable() {
         if (!isAvailable()) {

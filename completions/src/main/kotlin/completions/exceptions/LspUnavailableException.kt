@@ -1,4 +1,4 @@
-package completions.lsp
+package completions.exceptions
 
 import java.lang.RuntimeException
 
