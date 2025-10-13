@@ -12,9 +12,7 @@ dependencies {
     implementation(libs.kotlinx.coroutines.reactor)
     implementation(libs.kotlinx.serialization.core.jvm)
     implementation(libs.kotlinx.serialization.json.jvm)
-    implementation(project(":executors", configuration = "default"))
     implementation(project(":common", configuration = "default"))
-    implementation(project(":dependencies"))
 
     testImplementation(libs.kotlin.test)
     testImplementation(libs.bundles.testcontainers)
