@@ -11,6 +11,11 @@ import model.Completion
 import org.eclipse.lsp4j.CompletionItem
 import org.springframework.stereotype.Component
 
+/**
+ * Provides code completion functionality by leveraging an LSP server.
+ *
+ * TODO(KTL-3757): refactor this class to select user's selected file for completions inside the given project.
+ */
 @Component
 class LspCompletionProvider(
     private val lspProxy: KotlinLspProxy,
